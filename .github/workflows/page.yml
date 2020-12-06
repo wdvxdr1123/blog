@@ -27,5 +27,4 @@ jobs:
         uses: peaceiris/actions-gh-pages@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          external_repository: wdvxdr1123/wdvxdr1123.github.io
           publish_dir: ./public
