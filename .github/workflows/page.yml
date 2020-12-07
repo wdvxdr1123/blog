@@ -28,3 +28,13 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./public
+      
+      - name: SSH Auto Deploy
+          uses: hengkx/ssh-deploy@v1.0.1
+            env:
+              HOST: ${{ secrets.DEPLOY_HOST }}
+              USERNAME: ${{ secrets.DEPLOY_USERNAME }}
+              PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
+              PORT: ${{ secrets.DEPLOY_PORT }}
+              SOURCE: './public'
+              TARGET: ${{ secrets.DEPLOY_DEST_PATH }}
