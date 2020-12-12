@@ -11,6 +11,13 @@ title = "wdvxdr's blog"
 # 更改使用 Hugo 构建网站时使用的默认主题
 theme = "LoveIt"
 
+# 是否使用 robots.txt
+enableRobotsTXT = true
+# 是否使用 git 信息
+enableGitInfo = true
+# 是否使用 emoji 代码
+enableEmoji = true
+
 [params]
   # LoveIt 主题版本
   version = "0.2.X"
@@ -34,6 +41,23 @@ theme = "LoveIt"
       # LoveIt 新增 | 0.2.5 是否为标题显示打字机动画
       typeit = false
 
+ # 搜索配置
+  [params.search]
+    enable = true
+    # 搜索引擎的类型 ("lunr", "algolia")
+    type = "lunr"
+    # 文章内容最长索引长度
+    contentLength = 4000
+    # 搜索框的占位提示语
+    placeholder = ""
+    # 最大结果数目
+    maxResultLength = 10
+    # 结果内容片段长度
+    snippetLength = 50
+    # 搜索结果中高亮部分的 HTML 标签
+    highlightTag = "em"
+    # 是否在搜索索引中使用基于 baseURL 的绝对路径
+
   # 页面底部信息配置
   [params.footer]
     enable = true
@@ -46,7 +70,7 @@ theme = "LoveIt"
     # LoveIt 新增 | 0.2.0 是否显示作者
     author = true
     # 网站创立年份
-    since = 2010
+    since = 2020
     # ICP 备案信息，仅在中国使用 (支持 HTML 格式)
     icp = ""
     # 许可协议信息 (支持 HTML 格式)
@@ -159,7 +183,7 @@ theme = "LoveIt"
     Gitea = ""
     XMPP = ""
     Matrix = ""
-    Bilibili = "wdvxdr"
+    Bilibili = ""
     Email = "wdvxdr@foxmail.com"
     RSS = true # LoveIt 新增 | 0.2.0
 
@@ -259,25 +283,11 @@ theme = "LoveIt"
     # LoveIt 更改 | 0.2.0 评论系统设置
     [params.page.comment]
       enable = true
-      # Disqus 评论系统设置
-      [params.page.comment.disqus]
-        # LoveIt 新增 | 0.1.1
-        enable = true
-        # Disqus 的 shortname，用来在文章中启用 Disqus 评论系统
-        shortname = ""
-      # Gitalk 评论系统设置
-      [params.page.comment.gitalk]
-        # LoveIt 新增 | 0.1.1
-        enable = false
-        owner = ""
-        repo = ""
-        clientId = ""
-        clientSecret = ""
       # Valine 评论系统设置
       [params.page.comment.valine]
-        enable = false
-        appId = ""
-        appKey = ""
+        enable = true
+        appId = "YNwTWaP37mrOqpmagflrB4Hh-gzGzoHsz"
+        appKey = "Gzgv3AonIQExGzo3lYrEyJ2S"
         placeholder = ""
         avatar = "mp"
         meta= ""
@@ -294,35 +304,6 @@ theme = "LoveIt"
         # 可以在你的项目下相同路径存放你自己的数据文件:
         # "assets/data/emoji/"
         emoji = ""
-      # Facebook 评论系统设置
-      [params.page.comment.facebook]
-        enable = false
-        width = "100%"
-        numPosts = 10
-        appId = ""
-        languageCode = "zh_CN"
-      # LoveIt 新增 | 0.2.0 Telegram Comments 评论系统设置
-      [params.page.comment.telegram]
-        enable = false
-        siteID = ""
-        limit = 5
-        height = ""
-        color = ""
-        colorful = true
-        dislikes = false
-        outlined = false
-      # LoveIt 新增 | 0.2.0 Commento 评论系统设置
-      [params.page.comment.commento]
-        enable = false
-      # LoveIt 新增 | 0.2.5 Utterances 评论系统设置
-      [params.page.comment.utterances]
-        enable = true
-        # owner/repo
-        repo = ""
-        issueTerm = "pathname"
-        label = ""
-        lightTheme = "github-light"
-        darkTheme = "github-dark"
     # LoveIt 新增 | 0.2.7 第三方库配置
     [params.page.library]
       [params.page.library.css]
@@ -391,6 +372,15 @@ theme = "LoveIt"
     url = "/categories/"
     title = ""
     weight = 3
+  [[menu.main]]
+    identifier = "about"
+    pre = ""
+    post = ""
+    name = "关于"
+    url = "/about/"
+    title = ""
+    weight = 4
+
 
 # 作者配置
 [author]
