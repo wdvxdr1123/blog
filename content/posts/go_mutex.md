@@ -129,6 +129,8 @@ const (
 
 ### Go1.0 中的请求锁
 
+在这一版中，代码相比第一版有很大变化，其主要优化是给新来的`goroutine`一些机会，让新`goroutine`能不参与休眠就获取锁
+
 ```golang
 func (m *Mutex) Lock() {
     // Fast path: grab unlocked mutex.
@@ -148,9 +150,9 @@ func (m *Mutex) Lock() {
             // so we need to reset the flag in either case.
             new &^= mutexWoken // 清空唤醒标记
         }
-        if atomic.CompareAndSwapInt32(&m.state, old, new) {
+        if atomic.CompareAndSwapInt32(&m.state, old, new) { // 置新状态
             if old&mutexLocked == 0 {
-                break
+                break // 旧状态锁已释放，获取当前锁
             }
             runtime_Semacquire(&m.sema) // 请求信号量
             awoke = true
@@ -159,18 +161,20 @@ func (m *Mutex) Lock() {
 }
 ```
 
+我们可以用下面这个状态图表示请求锁的过程
+
 {{< mermaid >}}
 stateDiagram
     [*] --> Lock
     Lock --> [*]:Fast path
     Lock --> SlowPath
-    Semacquire --> SlowPath:等待信号量
-    SlowPath --> New:新人
-    New --> Semacquire:锁被持有，Waiter++
-    SlowPath --> Awoken:清空唤醒标记
-    Awoken --> Semacquire: 锁被持有
+    Semacquire --> SlowPath:wait
+    SlowPath --> First
+    First --> Semacquire:locked waiter++
+    SlowPath --> Awoken:reset woken
+    Awoken --> Semacquire: locked
     Awoken --> [*]
-    New --> [*]
+    First --> [*]
 {{< /mermaid >}}
 
 (咕了，过几天再写
