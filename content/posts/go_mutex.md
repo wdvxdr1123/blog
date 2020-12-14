@@ -51,7 +51,7 @@ export type Mutex struct {
 
 初版的Mutex定义非常简单，使用`key`记录当前锁是否被持有，`sema`记录当前信号量
 
-### 加锁的实现
+### 请求锁的实现
 
 ```golang
 func (m *Mutex) Lock() {
@@ -83,9 +83,9 @@ func xadd(val *int32, delta int32) (new int32) {
 `xadd`通过自旋CAS操作，将`val`的值加`delta`，就相当于现在Go语言的`atomic.AddInt32`
 {{< /admonition >}}
 
-### 解锁的实现
+### 释放锁的实现
 
-解锁的实现也很简洁:
+释放锁的实现也很简洁:
 
 ```golang
 func (m *Mutex) Unlock() {
@@ -97,7 +97,7 @@ func (m *Mutex) Unlock() {
 }
 ```
 
-解锁时，首先将当前标记减一，如果当前锁没有被其他`goroutine`持有，则直接返回，
+释放锁时，首先将当前标记减一，如果当前锁没有被其他`goroutine`持有，则直接返回，
 否则，通过信号量通知运行时，调度被挂起的`goroutine`。
 
 在这个版本，`Mutex`已经实现了基本的功能，但是这个版本有一个问题，所有`goroutine`会排队等待
@@ -107,4 +107,70 @@ func (m *Mutex) Unlock() {
 
 ## Go 1.0中Mutex的实现
 
-咕咕咕...
+在Go 1.0版本[[2]](https://github.com/golang/go/blob/release-branch.go1/src/pkg/sync/mutex.go)中，
+`Mutex`的结构体字段进行了调整
+
+```golang
+type Mutex struct {
+    state int32 // 复合数据，下文进行解释
+    sema  uint32 // 信号量
+}
+
+const (
+    mutexLocked = 1 << iota // state的第一位，代表当前锁是否被持有
+    mutexWoken              // state的第二位，唤醒标记
+    mutexWaiterShift = iota // 位移
+)
+```
+
+在这一版中，将`Mutex`的第一个字段由`key`改为`state`，其含义发生了很大的变化，`state`的第一位表示当前锁是否被持有，
+相当于之前的`key`，`state`的第二位是唤醒标记，代表当前是否有唤醒的`goroutine`正在请求锁，剩下的30位用来表示等待中
+的Waiter数量。
+
+### Go1.0 中的请求锁
+
+```golang
+func (m *Mutex) Lock() {
+    // Fast path: grab unlocked mutex.
+    if atomic.CompareAndSwapInt32(&m.state, 0, mutexLocked) { 
+        return // 无其他goroutine持有锁
+    }
+
+    awoke := false 
+    for {
+        old := m.state
+        new := old | mutexLocked // 新状态加上锁
+        if old&mutexLocked != 0 {
+            new = old + 1<<mutexWaiterShift // 如果已经有goroutine持有锁，则等待的 Waiter + 1
+        }
+        if awoke {
+            // The goroutine has been woken from sleep,
+            // so we need to reset the flag in either case.
+            new &^= mutexWoken // 清空唤醒标记
+        }
+        if atomic.CompareAndSwapInt32(&m.state, old, new) {
+            if old&mutexLocked == 0 {
+                break
+            }
+            runtime_Semacquire(&m.sema) // 请求信号量
+            awoke = true
+        }
+    }
+}
+```
+
+{{< mermaid >}}
+stateDiagram
+    [*] --> Lock
+    Lock --> [*]:Fast path
+    Lock --> SlowPath
+    Semacquire --> SlowPath:等待信号量
+    SlowPath --> New:新人
+    New --> Semacquire:锁被持有，Waiter++
+    SlowPath --> Awoken:清空唤醒标记
+    Awoken --> Semacquire: 锁被持有
+    Awoken --> [*]
+    New --> [*]
+{{< /mermaid >}}
+
+(咕了，过几天再写
