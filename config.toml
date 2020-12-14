@@ -394,7 +394,15 @@ enableEmoji = true
   [markup.highlight]
     # false 是必要的设置 (https://github.com/dillonzq/LoveIt/issues/158)
     noClasses = false
-
+    codeFences = true
+    guessSyntax = true
+    hl_Lines = ""
+    lineNoStart = 1
+    lineNos = true
+    lineNumbersInTable = false
+    style = "github"
+    tabWidth = 4
+    
 # 用于 Hugo 输出文档的设置
 [outputs]
   # LoveIt 更改 | 0.2.0
