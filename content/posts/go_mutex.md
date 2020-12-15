@@ -105,7 +105,7 @@ func (m *Mutex) Unlock() {
 这会导致频繁的上下文切换，如果我们把锁直接交给新人(未挂起的`goroutine`)，这样就可以避免上下文的切换，
 于是Go 团队再 Go1.0 正式版时对`Mutex`进行了较大的调整。
 
-## Go 1.0中Mutex的实现
+## 加入唤醒机制
 
 在Go 1.0版本[[2]](https://github.com/golang/go/blob/release-branch.go1/src/pkg/sync/mutex.go)中，
 `Mutex`的结构体字段进行了调整
@@ -127,7 +127,7 @@ const (
 相当于之前的`key`，`state`的第二位是唤醒标记，代表当前是否有唤醒的`goroutine`正在请求锁，剩下的30位用来表示等待中
 的Waiter数量。
 
-### Go1.0 中的请求锁
+### Go1.0 请求锁
 
 在这一版中，代码相比第一版有很大变化，其主要优化是给新来的`goroutine`一些机会，让新`goroutine`能不参与休眠就获取锁
 
@@ -135,7 +135,7 @@ const (
 func (m *Mutex) Lock() {
     // Fast path: grab unlocked mutex.
     if atomic.CompareAndSwapInt32(&m.state, 0, mutexLocked) { 
-        return // 无其他goroutine持有锁
+        return // 当前锁未被持有
     }
 
     awoke := false 
@@ -167,14 +167,109 @@ func (m *Mutex) Lock() {
 stateDiagram
     [*] --> Lock
     Lock --> [*]:Fast path
-    Lock --> SlowPath
-    Semacquire --> SlowPath:wait
-    SlowPath --> First
-    First --> Semacquire:locked waiter++
-    SlowPath --> Awoken:reset woken
-    Awoken --> Semacquire: locked
-    Awoken --> [*]
-    First --> [*]
+    Lock --> First
+    Semacquire --> Awoken:wait
+    First --> Semacquire:failed
+    Awoken --> Semacquire: failed
+    Awoken --> [*]:attempt
+    First --> [*]:attempt
 {{< /mermaid >}}
+
+我们可以发现，在这版的`Mutex`中，给新来的`goroutine`会在加入等待队列前就去尝试获取锁，
+如果失败则加入等待队列中
+
+### Go1.0 释放锁
+
+同时在Go 1.0中，释放锁的代码也变得更加复杂了
+
+```golang
+func (m *Mutex) Unlock() {
+    // Fast path: drop lock bit.
+    new := atomic.AddInt32(&m.state, -mutexLocked) // 去掉持有锁标记
+    if (new+mutexLocked)&mutexLocked == 0 {
+        panic("sync: unlock of unlocked mutex") // 重复Unlock时panic
+    }
+
+    old := new
+    for {
+        // 如果没有其他的waiter
+        // 或者已经有唤醒的goroutine
+        if old>>mutexWaiterShift == 0 || old&(mutexLocked|mutexWoken) != 0 {
+            return
+        }
+        // 挑选一个waiter唤醒
+        new = (old - 1<<mutexWaiterShift) | mutexWoken // 打上唤醒标记
+        if atomic.CompareAndSwapInt32(&m.state, old, new) { // 置新状态
+            runtime_Semrelease(&m.sema)
+            return
+        }
+        old = m.state
+    }
+}
+```
+
+1. 在释放锁时，首先会将锁标记为未锁状态，如果当前锁已经是未锁状态，则会`panic`(第5行)
+2. 如果当前已经有唤醒的`goroutine`或者没有等待中的`waiter`，我们就什么都不用做，其他`goroutine`会自己抢夺这把锁
+3. 如果没有唤醒的`goroutine`,就从等待队列中唤醒一个`goroutine`
+
+### 给新 Goroutine 更多机会
+
+在 Go1.5 版本中，Go团队又对`Mutex`进行了一次优化[[3]](https://github.com/golang/go/blob/edcad8639a902741dc49f77d000ed62b0cc6956f/src/sync/mutex.go)
+
+在某些临界区，代码执行的速度很快，如果加入等待队列就会浪费很多时间，Go 团队针对这一情景对`Mutex`进行了优化
+
+```golang
+func (m *Mutex) Lock() {
+    // Fast path: grab unlocked mutex.
+    if atomic.CompareAndSwapInt32(&m.state, 0, mutexLocked) {
+        if raceenabled { // race detector 相关
+            raceAcquire(unsafe.Pointer(m))
+        }
+        return
+    }
+
+    awoke := false
+    iter := 0 // 自旋次数
+    for {
+        old := m.state
+        new := old | mutexLocked
+        if old&mutexLocked != 0 { // 当前锁被持有
+            if runtime_canSpin(iter) { // 检测是否可以自旋
+                // 如果当前的没有其他唤醒的goroutine
+                // 尝试将当前goroutine置为唤醒状态
+                // 提醒 Unlock 不去唤醒其他goroutine
+                if !awoke && old&mutexWoken == 0 && old>>mutexWaiterShift != 0 &&
+                    atomic.CompareAndSwapInt32(&m.state, old, old|mutexWoken) {
+                    awoke = true // 设置当前唤醒状态
+                }
+                runtime_doSpin()
+                iter++
+                continue // 自旋再次请求锁
+            }
+            new = old + 1<<mutexWaiterShift // 加入等待队列
+        }
+        if awoke {
+            // The goroutine has been woken from sleep,
+            // so we need to reset the flag in either case.
+            if new&mutexWoken == 0 {
+                panic("sync: inconsistent mutex state")
+            }
+            new &^= mutexWoken
+        }
+        if atomic.CompareAndSwapInt32(&m.state, old, new) {
+            if old&mutexLocked == 0 {
+                break
+            }
+            runtime_Semacquire(&m.sema)
+            awoke = true
+            iter = 0 // 清空自旋计数
+        }
+    }
+
+    if raceenabled { // race detector 相关
+        raceAcquire(unsafe.Pointer(m))
+    }
+}
+```
 
 (咕了，过几天再写
