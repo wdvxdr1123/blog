@@ -272,4 +272,118 @@ func (m *Mutex) Lock() {
 }
 ```
 
+在某些临界区，代码执行速度很快，如果通过自旋几次就能获取到锁的所有权，就可以避免加入等待队列，
+这样就可以减少上下文的切换，在某些情况下能很好的提高性能。
+
+## 饥饿机制
+
+进过几次优化后，`Mutex`的性能已经十分好了，但是由于自旋的存在，在特定情况下，有可能出现新人不断
+地获取锁，而等待队列中的`goroutine`一直没有机会获取到锁，Go 团队针对这种情况加入了饥饿机制。
+
+我们拿最新的 Go 1.15 中的源码进行分析
+
+```golang
+const (
+    mutexLocked = 1 << iota // mutex is locked
+    mutexWoken              // 唤醒标记
+    mutexStarving           // 饥饿标记
+    mutexWaiterShift = iota // 偏移量
+
+    starvationThresholdNs = 1e6 // 1ms
+)
+```
+
+在这个版本中， state的第三位被用作饥饿标记
+
+```golang
+func (m *Mutex) lockSlow() {
+    var waitStartTime int64
+    starving := false // 初始饥饿标记
+    awoke := false
+    iter := 0
+    old := m.state
+    for {
+        // Don't spin in starvation mode, ownership is handed off to waiters
+        // so we won't be able to acquire the mutex anyway.
+        if old&(mutexLocked|mutexStarving) == mutexLocked && runtime_canSpin(iter) {
+            // Active spinning makes sense.
+            // Try to set mutexWoken flag to inform Unlock
+            // to not wake other blocked goroutines.
+            if !awoke && old&mutexWoken == 0 && old>>mutexWaiterShift != 0 &&
+                atomic.CompareAndSwapInt32(&m.state, old, old|mutexWoken) {
+                awoke = true
+            }
+            runtime_doSpin()
+            iter++
+            old = m.state
+            continue
+        }
+        new := old
+        // Don't try to acquire starving mutex, new arriving goroutines must queue.
+        if old&mutexStarving == 0 {
+            new |= mutexLocked
+        }
+        if old&(mutexLocked|mutexStarving) != 0 {
+            new += 1 << mutexWaiterShift
+        }
+        // The current goroutine switches mutex to starvation mode.
+        // But if the mutex is currently unlocked, don't do the switch.
+        // Unlock expects that starving mutex has waiters, which will not
+        // be true in this case.
+        if starving && old&mutexLocked != 0 {
+            new |= mutexStarving
+        }
+        if awoke {
+            // The goroutine has been woken from sleep,
+            // so we need to reset the flag in either case.
+            if new&mutexWoken == 0 {
+                throw("sync: inconsistent mutex state")
+            }
+            new &^= mutexWoken
+        }
+        if atomic.CompareAndSwapInt32(&m.state, old, new) {
+            if old&(mutexLocked|mutexStarving) == 0 {
+                break // locked the mutex with CAS
+            }
+            // If we were already waiting before, queue at the front of the queue.
+            queueLifo := waitStartTime != 0
+            if waitStartTime == 0 {
+                waitStartTime = runtime_nanotime()
+            }
+            runtime_SemacquireMutex(&m.sema, queueLifo, 1)
+            starving = starving || runtime_nanotime()-waitStartTime > starvationThresholdNs
+            old = m.state
+            if old&mutexStarving != 0 {
+                // If this goroutine was woken and mutex is in starvation mode,
+                // ownership was handed off to us but mutex is in somewhat
+                // inconsistent state: mutexLocked is not set and we are still
+                // accounted as waiter. Fix that.
+                if old&(mutexLocked|mutexWoken) != 0 || old>>mutexWaiterShift == 0 {
+                    throw("sync: inconsistent mutex state")
+                }
+                delta := int32(mutexLocked - 1<<mutexWaiterShift)
+                if !starving || old>>mutexWaiterShift == 1 {
+                    // Exit starvation mode.
+                    // Critical to do it here and consider wait time.
+                    // Starvation mode is so inefficient, that two goroutines
+                    // can go lock-step infinitely once they switch mutex
+                    // to starvation mode.
+                    delta -= mutexStarving
+                }
+                atomic.AddInt32(&m.state, delta)
+                break
+            }
+            awoke = true
+            iter = 0
+        } else {
+            old = m.state
+        }
+    }
+
+    if race.Enabled {
+        race.Acquire(unsafe.Pointer(m))
+    }
+}
+```
+
 (咕了，过几天再写
