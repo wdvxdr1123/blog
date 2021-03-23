@@ -71,7 +71,7 @@ auto c = std::get<0>(x);
 ```cpp
 using namespace std;
 auto x = tuple<int, tuple<int, int>>{1, {2, 3}};
-auto &[a, x2] = x; // 还是rust的模式结构nb
+auto &[a, x2] = x; // 还是rust的模式解构nb
 auto &[b, c] = x2;
 // a= 1,b= 2,c= 3
 cout << "a= " << a << ",b= " << b << ",c= " << c << endl;
