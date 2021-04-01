@@ -9,7 +9,7 @@ hasCJKLanguage = true
 title = "wdvxdr's blog"
 
 # 更改使用 Hugo 构建网站时使用的默认主题
-theme = "LoveIt"
+theme = "love_it"
 
 # 是否使用 robots.txt
 enableRobotsTXT = true
