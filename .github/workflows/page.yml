@@ -26,13 +26,12 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./public
 
-      - name: Deploy to Server
-        uses: easingthemes/ssh-deploy@v2.1.5
-        env:
-            SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_PASSWORD }}
-            ARGS: "-rltgoDzvO --delete"
-            SOURCE: "./public"
-            REMOTE_HOST: ${{ secrets.DEPLOY_HOST }}
-            REMOTE_PORT: ${{ secrets.DEPLOY_PORT }}
-            REMOTE_USER: ${{ secrets.DEPLOY_USERNAME }}
-            TARGET: ${{ secrets.DEPLOY_DEST_PATH }}
+      - name: deploy file
+        uses: wlixcc/SFTP-Deploy-Action@v1.2.1
+        with:
+          username: ${{ secrets.DEPLOY_USERNAME }}
+          server: ${{ secrets.DEPLOY_HOST }}
+          ssh_private_key: ${{ secrets.DEPLOY_PASSWORD }}
+          local_path: './public'
+          remote_path: ${{ secrets.DEPLOY_DEST_PATH }}
+          args: '-o ConnectTimeout=5'
