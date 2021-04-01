@@ -28,13 +28,14 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./public
-      
-      - name: SSH Auto Deploy
-        uses: hengkx/ssh-deploy@v1.0.1
-        with:
-          HOST: ${{ secrets.DEPLOY_HOST }}
-          USERNAME: ${{ secrets.DEPLOY_USERNAME }}
-          PASSWORD: ${{ secrets.DEPLOY_PASSWORD }}
-          PORT: ${{ secrets.DEPLOY_PORT }}
-          SOURCE: './public'
-          TARGET: ${{ secrets.DEPLOY_DEST_PATH }}
+
+      - name: Deploy to Server
+        uses: easingthemes/ssh-deploy@v2.1.5
+        env:
+            SSH_PRIVATE_KEY: ${{ secrets.DEPLOY_PASSWORD }}
+            ARGS: "-rltgoDzvO --delete"
+            SOURCE: "./dist"
+            REMOTE_HOST: ${{ secrets.DEPLOY_HOST }}
+            REMOTE_PORT: ${{ secrets.DEPLOY_PORT }}
+            REMOTE_USER: ${{ secrets.DEPLOY_USERNAME }}
+            TARGET: ${{ secrets.DEPLOY_DEST_PATH }}

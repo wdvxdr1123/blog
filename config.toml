@@ -356,22 +356,30 @@ enableEmoji = true
     # 当你将鼠标悬停在此菜单链接上时, 将显示的标题
     title = ""
     weight = 1
+  #[[menu.main]]
+  #  identifier = "tags"
+  #  pre = ""
+  #  post = ""
+  #  name = "标签"
+  #  url = "/tags/"
+  #  title = ""
+  #  weight = 2
+  #[[menu.main]]
+  #  identifier = "categories"
+  #  pre = ""
+  #  post = ""
+  #  name = "分类"
+  #  url = "/categories/"
+  #  title = ""
+  #  weight = 3
   [[menu.main]]
-    identifier = "tags"
+    identifier = "links"
     pre = ""
     post = ""
-    name = "标签"
-    url = "/tags/"
+    name = "友链"
+    url = "/links/"
     title = ""
-    weight = 2
-  [[menu.main]]
-    identifier = "categories"
-    pre = ""
-    post = ""
-    name = "分类"
-    url = "/categories/"
-    title = ""
-    weight = 3
+    weight = 4
   [[menu.main]]
     identifier = "about"
     pre = ""
