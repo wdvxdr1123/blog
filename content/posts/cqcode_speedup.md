@@ -22,11 +22,15 @@ CQCode
     ;
 
 Type
-    : IDENTIFIER
+    : string
     ;
 
 ParameterList
-    : (IDENTIFIER  '=' IDENTIFIER )*
+    : Parmeter (',' Parmeter)*
+    ;
+
+Parameter
+    : string '=' string
     ;
 ```
 
