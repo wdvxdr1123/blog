@@ -53,8 +53,7 @@ Go 1.16
 
 我查看了修复这个 bug 的 commit 记录[link](https://github.com/golang/go/commit/6f7b553c82b69b47becbe36d9115971d30fdab48).
 
-{{< image src="/images/go1.16-cgo1.png" caption="修复的 commit 记录" >}}  
-
+{{< image src="/images/go1.16-cgo1.png" caption="修复的 commit 记录" width="774" >}}  
 从这条 commit 中可以看出， cgo 工具在go 1.16中为所有Go文件中定义的导出函数加上了 `__declspec(dllexport)`，
 这样没有使用 `//export` 的函数就不会被导出，但是我们的 C 文件中定义的函数也会被忽略。
 
