@@ -2,12 +2,10 @@
 title: "关于"
 date: 2020-12-11T13:10:13+08:00
 draft: false
-
-lightgallery: true
-
-math:
-  enable: true
 ---
 
-一个鸽子
-(咕...)
+一个鸽子(咕...)
+
+## 关于ID
+
+滚键盘出来的，硬凑个理由就是: 在键盘上排列为一个X

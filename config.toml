@@ -119,7 +119,7 @@ enableEmoji = true
     [params.home.posts]
       enable = true
       # 主页每页显示文章数量
-      paginate = 6
+      paginate = 8
       # LoveIt 删除 | 0.2.0 被 params.page 中的 hiddenFromHomePage 替代
       # 当你没有在文章前置参数中设置 "hiddenFromHomePage" 时的默认行为
       defaultHiddenFromHomePage = false
@@ -220,7 +220,7 @@ enableEmoji = true
       # 是否显示代码块的复制按钮
       copy = true
       # 默认展开显示的代码行数
-      maxShownLines = 10
+      maxShownLines = 20
     # LoveIt 更改 | 0.2.0 KaTeX 数学公式
     [params.page.math]
       enable = true
