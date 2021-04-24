@@ -1,6 +1,6 @@
 ---
 title: "一些没什么用的API"
-date: 2021-04-24T20:43:13+08:00
+date: 2021-04-24T23:35:13+08:00
 draft: false
 ---
 
@@ -60,3 +60,43 @@ format格式具体内容
 |:-------:|:-----:|:------------:|
 |  count  |  int  | 返回回复的数量 |
 | replies | array |   返回的回复   |
+
+### hitokoto
+
+一言， 数据源自 `hitokoto.cn`
+
+    GET https://api.wdvxdr.com/hitokoto?category=anime
+
+当 category 不存在时，会随机从数据多的库中获取。
+
+|    类型    |   说明   |
+|:----------:|:------:|
+|   anime    |   动画   |
+|   comic    |   漫画   |
+|    game    |   游戏   |
+| literature |   文学   |
+|  original  |   原创   |
+|  internet  | 来自网络 |
+|   other    |   其他   |
+|   video    |   影视   |
+|    poem    |   诗词   |
+|    ncm     |  网易云  |
+| philosophy |   哲学   |
+|   funny    |  抖机灵  |
+
+返回数据和 `hitokoto.cn` 一致
+
+| 返回参数名称 |                 描述                  |
+|:------------:|:-----------------------------------:|
+|      id      |               一言标识                |
+|   hitokoto   | 一言正文。编码方式 unicode。使用 utf-8。 |
+|     type     |      类型。请参考第三节参数的表格      |
+|     from     |              一言的出处               |
+|   from_who   |              一言的作者               |
+|   creator    |                添加者                 |
+| creator_uid  |            添加者用户标识             |
+|   reviewer   |              审核员标识               |
+|     uuid     |             一言唯一标识；             |
+| commit_from  |               提交方式                |
+|  created_at  |               添加时间                |
+|    length    |               句子长度                |
