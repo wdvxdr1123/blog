@@ -9,7 +9,7 @@ hasCJKLanguage = true
 title = "wdvxdr's blog"
 
 # 更改使用 Hugo 构建网站时使用的默认主题
-theme = "love_it"
+theme = "DoIt"
 
 # 是否使用 robots.txt
 enableRobotsTXT = true
@@ -212,7 +212,7 @@ enableEmoji = true
       # 是否使用目录
       enable = true
       # LoveIt 新增 | 0.2.9 是否保持使用文章前面的静态目录
-      keepStatic = true
+      keepStatic = false
       # 是否使侧边目录自动折叠展开
       auto = true
     # LoveIt 新增 | 0.2.0 代码配置
@@ -393,23 +393,20 @@ enableEmoji = true
 # 作者配置
 [author]
   name = "wdvxdr"
-  email = "wdvxdr@foxmail.com"
+  email = "wdvxdr1123@gmail.com"
   link = ""
 
 # Hugo 解析文档的配置
 [markup]
   # 语法高亮设置 (https://gohugo.io/content-management/syntax-highlighting)
   [markup.highlight]
-    # false 是必要的设置 (https://github.com/dillonzq/LoveIt/issues/158)
-    noClasses = false
     codeFences = true
     guessSyntax = true
-    hl_Lines = ""
-    lineNoStart = 1
     lineNos = true
-    lineNumbersInTable = false
-    style = "github"
-    tabWidth = 4
+    lineNumbersInTable = true
+    # false 是必要的设置
+    # (https://github.com/dillonzq/LoveIt/issues/158)
+    noClasses = false
     
 # 用于 Hugo 输出文档的设置
 [outputs]

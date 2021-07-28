@@ -137,7 +137,7 @@ End:
 在上一版状态机中,状态数目较少，只能解析出整个CQ码的字符串，将Type和参数取出来，需要使用Split分割，
 于是我设计了一个更加全面的状态机。
 
-{{< mermaid >}}
+{{< mermaid >}} 
 stateDiagram-v2
     [*] --> PlainText
     note left of PlainText: 纯文本
