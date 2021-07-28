@@ -3,21 +3,25 @@
 <meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">
 <meta name=robots content="noodp">
-<meta http-equiv=x-ua-compatible content="IE=edge, chrome=1">
-<title>加速CQ码解析背后原理 - wdvxdr's blog</title><meta name=Description content><meta property="og:title" content="加速CQ码解析背后原理">
+<meta http-equiv=x-ua-compatible content="IE=edge">
+<title class=pjax-title>加速CQ码解析背后原理 - wdvxdr's blog</title><meta name=Description content><meta property="og:title" content="加速CQ码解析背后原理">
 <meta property="og:description" content="前言 在开源项目 go-cqhttp 中，我提交了两个 pr(#659,#660) 使得CQ码 (一种用字符串表示IM消息的方式)效率变为了原来的400%。 这篇文章简单介绍了加速解析的原理，里">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://www.wdvxdr.com/posts/cqcode_speedup/"><meta property="article:section" content="posts">
 <meta property="article:published_time" content="2021-03-22T22:39:00+08:00">
-<meta property="article:modified_time" content="2021-07-27T21:07:42+08:00">
+<meta property="article:modified_time" content="2021-07-28T12:41:39+08:00">
 <meta name=twitter:card content="summary">
 <meta name=twitter:title content="加速CQ码解析背后原理">
 <meta name=twitter:description content="前言 在开源项目 go-cqhttp 中，我提交了两个 pr(#659,#660) 使得CQ码 (一种用字符串表示IM消息的方式)效率变为了原来的400%。 这篇文章简单介绍了加速解析的原理，里">
 <meta name=application-name content="wdvxdr's blog">
-<meta name=apple-mobile-web-app-title content="wdvxdr's blog"><link rel="shortcut icon" type=image/x-icon href=/favicon.ico>
+<meta name=apple-mobile-web-app-title content="wdvxdr's blog">
+<meta name=theme-color content="#ffffff"><link rel="shortcut icon" type=image/x-icon href=/favicon.ico>
 <link rel=icon type=image/png sizes=32x32 href=/favicon-32x32.png>
-<link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=apple-touch-icon sizes=180x180 href=/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=canonical href=https://www.wdvxdr.com/posts/cqcode_speedup/><link rel=prev href=https://www.wdvxdr.com/posts/go_mutex/><link rel=next href=https://www.wdvxdr.com/posts/go1.16-cgo-export/><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css><link rel=stylesheet href=/css/style.min.css><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.13.0/css/all.min.css><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/animate.css@3.7.2/animate.min.css><script type=application/ld+json>{"@context":"http://schema.org","@type":"BlogPosting","headline":"加速CQ码解析背后原理","inLanguage":"zh-CN","mainEntityOfPage":{"@type":"WebPage","@id":"https:\/\/www.wdvxdr.com\/posts\/cqcode_speedup\/"},"genre":"posts","wordcount":2406,"url":"https:\/\/www.wdvxdr.com\/posts\/cqcode_speedup\/","datePublished":"2021-03-22T22:39:00+08:00","dateModified":"2021-07-27T21:07:42+08:00","publisher":{"@type":"Organization","name":""},"author":{"@type":"Person","name":"wdvxdr"},"description":""}</script></head>
-<body header-desktop=fixed header-mobile=auto><script type=text/javascript>(window.localStorage&&localStorage.getItem('theme')?localStorage.getItem('theme')==='dark':''==='auto'?window.matchMedia('(prefers-color-scheme: dark)').matches:''==='dark')&&document.body.setAttribute('theme','dark')</script>
+<link rel=icon type=image/png sizes=16x16 href=/favicon-16x16.png><link rel=apple-touch-icon sizes=180x180 href=/apple-touch-icon.png><link rel=manifest href=/site.webmanifest><link rel=canonical href=https://www.wdvxdr.com/posts/cqcode_speedup/><link rel=prev href=https://www.wdvxdr.com/posts/go_mutex/><link rel=next href=https://www.wdvxdr.com/posts/go1.16-cgo-export/><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/normalize.css@8.0.1/normalize.min.css><link rel=stylesheet href=/css/style.min.css><link rel=preload as=style onload="this.onload=null,this.rel='stylesheet'" href=https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.3/css/all.min.css>
+<noscript><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@5.15.3/css/all.min.css></noscript><link rel=preload as=style onload="this.onload=null,this.rel='stylesheet'" href=https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css>
+<noscript><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css></noscript><script type=application/ld+json>{"@context":"http://schema.org","@type":"BlogPosting","headline":"加速CQ码解析背后原理","inLanguage":"zh-CN","mainEntityOfPage":{"@type":"WebPage","@id":"https:\/\/www.wdvxdr.com\/posts\/cqcode_speedup\/"},"genre":"posts","wordcount":2273,"url":"https:\/\/www.wdvxdr.com\/posts\/cqcode_speedup\/","datePublished":"2021-03-22T22:39:00+08:00","dateModified":"2021-07-28T12:41:39+08:00","publisher":{"@type":"Organization","name":""},"author":{"@type":"Person","name":"wdvxdr"},"description":""}</script></head>
+<body header-desktop=fixed header-mobile=auto><script type=text/javascript>function setTheme(a){document.body.setAttribute('theme',a)}function saveTheme(a){window.localStorage&&localStorage.setItem('theme',a)}function getMeta(b){const a=document.getElementsByTagName('meta');for(let c=0;c<a.length;c++)if(a[c].getAttribute('name')===b)return a[c];return''}if(window.localStorage&&localStorage.getItem('theme')){let a=localStorage.getItem('theme');a==='light'||a==='dark'||a==='black'?setTheme(a):window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?setTheme('dark'):setTheme('light')}else''==='light'||''==='dark'||''==='black'?(setTheme(''),saveTheme('')):(saveTheme('auto'),window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches?setTheme('dark'):setTheme('light'));let themeColorMeta=getMeta('theme-color');document.body.getAttribute('theme')!='light'&&(themeColorMeta.content='#000000')</script>
+<div id=back-to-top></div>
 <div id=mask></div><div class=wrapper><header class=desktop id=header-desktop>
 <div class=header-wrapper>
 <div class=header-title>
@@ -26,19 +30,18 @@
 <div class=menu>
 <div class=menu-inner><a class=menu-item href=/posts/> 文章 </a><a class=menu-item href=/about/> 关于 </a><a class=menu-item href=/links/> 友链 </a><span class="menu-item delimiter"></span><span class="menu-item search" id=search-desktop>
 <input type=text placeholder=搜索文章标题或内容... id=search-input-desktop>
-<a href=javascript:void(0); class="search-button search-toggle" id=search-toggle-desktop title=搜索>
+<a href=# onclick=return!1 class="search-button search-toggle" id=search-toggle-desktop title=搜索>
 <i class="fas fa-search fa-fw"></i>
 </a>
-<a href=javascript:void(0); class="search-button search-clear" id=search-clear-desktop title=清空>
+<a href=# onclick=return!1 class="search-button search-clear" id=search-clear-desktop title=清空>
 <i class="fas fa-times-circle fa-fw"></i>
 </a>
 <span class="search-button search-loading" id=search-loading-desktop>
 <i class="fas fa-spinner fa-fw fa-spin"></i>
 </span>
-</span><a href=javascript:void(0); class="menu-item theme-switch" title=切换主题>
+</span><a href=# onclick=return!1 class="menu-item theme-switch" title=切换主题>
 <i class="fas fa-adjust fa-fw"></i>
-</a>
-</div>
+</a></div>
 </div>
 </div>
 </header><header class=mobile id=header-mobile>
@@ -54,20 +57,20 @@
 <div class=menu id=menu-mobile><div class=search-wrapper>
 <div class="search mobile" id=search-mobile>
 <input type=text placeholder=搜索文章标题或内容... id=search-input-mobile>
-<a href=javascript:void(0); class="search-button search-toggle" id=search-toggle-mobile title=搜索>
+<a href=# onclick=return!1 class="search-button search-toggle" id=search-toggle-mobile title=搜索>
 <i class="fas fa-search fa-fw"></i>
 </a>
-<a href=javascript:void(0); class="search-button search-clear" id=search-clear-mobile title=清空>
+<a href=# onclick=return!1 class="search-button search-clear" id=search-clear-mobile title=清空>
 <i class="fas fa-times-circle fa-fw"></i>
 </a>
 <span class="search-button search-loading" id=search-loading-mobile>
 <i class="fas fa-spinner fa-fw fa-spin"></i>
 </span>
 </div>
-<a href=javascript:void(0); class=search-cancel id=search-cancel-mobile>
+<a href=# onclick=return!1 class=search-cancel id=search-cancel-mobile>
 取消
 </a>
-</div><a class=menu-item href=/posts/ title>文章</a><a class=menu-item href=/about/ title>关于</a><a class=menu-item href=/links/ title>友链</a><a href=javascript:void(0); class="menu-item theme-switch" title=切换主题>
+</div><a class=menu-item href=/posts/ title>文章</a><a class=menu-item href=/about/ title>关于</a><a class=menu-item href=/links/ title>友链</a><a href=# onclick=return!1 class="menu-item theme-switch" title=切换主题>
 <i class="fas fa-adjust fa-fw"></i>
 </a></div>
 </div>
@@ -82,13 +85,15 @@
 <div class=container><div class=toc id=toc-auto>
 <h2 class=toc-title>目录</h2>
 <div class=toc-content id=toc-content-auto></div>
-</div><article class="page single"><h1 class="single-title animated flipInX">加速CQ码解析背后原理</h1><div class=post-meta>
-<div class=post-meta-line><span class=post-author><a href=/ title=Author rel=" author" class=author><i class="fas fa-user-circle fa-fw"></i>wdvxdr</a></span></div>
-<div class=post-meta-line><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime=2021-03-22>2021-03-22</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;约 2406 字&nbsp;
+</div><script>document.getElementsByTagName("main")[0].setAttribute("pageStyle","normal")</script><script>document.getElementsByTagName("main")[0].setAttribute("autoTOC","true")</script><article class="page single"><h1 class="single-title animate__animated animate__flipInX">加速CQ码解析背后原理</h1><div class=post-meta>
+<div class=post-meta-line>
+<span class=post-author><a href=/ title=Author rel=" author" class=author><i class="author fas fa-user-circle fa-fw"></i>wdvxdr</a>
+</span></div>
+<div class=post-meta-line><i class="far fa-calendar-alt fa-fw"></i>&nbsp;<time datetime=2021-03-22>2021-03-22</time>&nbsp;<i class="far fa-edit fa-fw"></i>&nbsp;<time datetime=2021-07-28>2021-07-28</time>&nbsp;<i class="fas fa-pencil-alt fa-fw"></i>&nbsp;约 2273 字&nbsp;
 <i class="far fa-clock fa-fw"></i>&nbsp;预计阅读 5 分钟&nbsp;<span id=/posts/cqcode_speedup/ class=leancloud_visitors data-flag-title=加速CQ码解析背后原理>
 <i class="far fa-eye fa-fw"></i>&nbsp;<span class=leancloud-visitors-count></span>&nbsp;次阅读
 </span>&nbsp;</div>
-</div><div class="details toc" id=toc-static kept=true>
+</div><div class="details toc" id=toc-static kept>
 <div class="details-summary toc-title">
 <span>目录</span>
 <span><i class="details-icon fas fa-angle-right"></i></span>
@@ -122,101 +127,204 @@
 <h2 id=cq码解析的原方案>CQ码解析的原方案</h2>
 <h3 id=cq码的语法规则>CQ码的语法规则</h3>
 <p>CQ码的表示可以为<a href=https://github.com/howmanybots/onebot/blob/master/v11/specs/message/string.md#cq-%E7%A0%81%E6%A0%BC%E5%BC%8F target=_blank rel="noopener noreffer">[1]</a></p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-antlr data-lang=antlr><span class=ln> 1</span><span class=nl>CQCode</span><span class=w>
-</span><span class=ln> 2</span><span class=w>    </span><span class=p>:</span><span class=w> </span><span class=s>&#34;[CQ:&#34;</span><span class=w> </span><span class=no>Type</span><span class=w> </span><span class=o>(</span><span class=s>&#39;,&#39;</span><span class=w> </span><span class=no>ParameterList</span><span class=o>)?</span><span class=w> </span><span class=s>&#39;]&#39;</span><span class=w>
-</span><span class=ln> 3</span><span class=w>    </span><span class=p>;</span><span class=w>
-</span><span class=ln> 4</span><span class=w>
-</span><span class=ln> 5</span><span class=w></span><span class=nl>Type</span><span class=w>
-</span><span class=ln> 6</span><span class=w>    </span><span class=p>:</span><span class=w> </span><span class=nv>string</span><span class=w>
-</span><span class=ln> 7</span><span class=w>    </span><span class=p>;</span><span class=w>
-</span><span class=ln> 8</span><span class=w>
-</span><span class=ln> 9</span><span class=w></span><span class=nl>ParameterList</span><span class=w>
-</span><span class=ln>10</span><span class=w>    </span><span class=p>:</span><span class=w> </span><span class=no>Parmeter</span><span class=w> </span><span class=o>(</span><span class=s>&#39;,&#39;</span><span class=w> </span><span class=no>Parmeter</span><span class=o>)*</span><span class=w>
-</span><span class=ln>11</span><span class=w>    </span><span class=p>;</span><span class=w>
-</span><span class=ln>12</span><span class=w>
-</span><span class=ln>13</span><span class=w></span><span class=nl>Parameter</span><span class=w>
-</span><span class=ln>14</span><span class=w>    </span><span class=p>:</span><span class=w> </span><span class=nv>string</span><span class=w> </span><span class=s>&#39;=&#39;</span><span class=w> </span><span class=nv>string</span><span class=w>
-</span><span class=ln>15</span><span class=w>    </span><span class=p>;</span><span class=w>
-</span></code></pre></div><p>其中<code>Type</code>是消息类型，<code>ParameterList</code>是参数列表</p>
+<div class=highlight><div class=chroma>
+<table class=lntable><tr><td class=lntd>
+<pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span></code></pre></td>
+<td class=lntd>
+<pre tabindex=0 class=chroma><code class=language-antlr data-lang=antlr><span class=nl>CQCode</span><span class=w>
+</span><span class=w>    </span><span class=p>:</span><span class=w> </span><span class=s>&#34;[CQ:&#34;</span><span class=w> </span><span class=no>Type</span><span class=w> </span><span class=o>(</span><span class=s>&#39;,&#39;</span><span class=w> </span><span class=no>ParameterList</span><span class=o>)?</span><span class=w> </span><span class=s>&#39;]&#39;</span><span class=w>
+</span><span class=w>    </span><span class=p>;</span><span class=w>
+</span><span class=w>
+</span><span class=w></span><span class=nl>Type</span><span class=w>
+</span><span class=w>    </span><span class=p>:</span><span class=w> </span><span class=nv>string</span><span class=w>
+</span><span class=w>    </span><span class=p>;</span><span class=w>
+</span><span class=w>
+</span><span class=w></span><span class=nl>ParameterList</span><span class=w>
+</span><span class=w>    </span><span class=p>:</span><span class=w> </span><span class=no>Parmeter</span><span class=w> </span><span class=o>(</span><span class=s>&#39;,&#39;</span><span class=w> </span><span class=no>Parmeter</span><span class=o>)*</span><span class=w>
+</span><span class=w>    </span><span class=p>;</span><span class=w>
+</span><span class=w>
+</span><span class=w></span><span class=nl>Parameter</span><span class=w>
+</span><span class=w>    </span><span class=p>:</span><span class=w> </span><span class=nv>string</span><span class=w> </span><span class=s>&#39;=&#39;</span><span class=w> </span><span class=nv>string</span><span class=w>
+</span><span class=w>    </span><span class=p>;</span><span class=w>
+</span></code></pre></td></tr></table>
+</div>
+</div><p>其中<code>Type</code>是消息类型，<code>ParameterList</code>是参数列表</p>
 <h3 id=正则表达式解析>正则表达式解析</h3>
 <p>在最初解析方案是采用正则表达式，使用标准库中的<code>regex</code>包进行解析</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=ln>1</span><span class=kd>var</span> <span class=nx>matchReg</span> <span class=p>=</span> <span class=nx>regexp</span><span class=p>.</span><span class=nf>MustCompile</span><span class=p>(</span><span class=s>`\[CQ:\w+?.*?]`</span><span class=p>)</span>
-<span class=ln>2</span><span class=kd>var</span> <span class=nx>typeReg</span> <span class=p>=</span> <span class=nx>regexp</span><span class=p>.</span><span class=nf>MustCompile</span><span class=p>(</span><span class=s>`\[CQ:(\w+)`</span><span class=p>)</span>
-<span class=ln>3</span><span class=kd>var</span> <span class=nx>paramReg</span> <span class=p>=</span> <span class=nx>regexp</span><span class=p>.</span><span class=nf>MustCompile</span><span class=p>(</span><span class=s>`,([\w\-.]+?)=([^,\]]+)`</span><span class=p>)</span>
-</code></pre></div><h3 id=自动机解析>自动机解析</h3>
+<div class=highlight><div class=chroma>
+<table class=lntable><tr><td class=lntd>
+<pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span></code></pre></td>
+<td class=lntd>
+<pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=kd>var</span> <span class=nx>matchReg</span> <span class=p>=</span> <span class=nx>regexp</span><span class=p>.</span><span class=nf>MustCompile</span><span class=p>(</span><span class=s>`\[CQ:\w+?.*?]`</span><span class=p>)</span>
+<span class=kd>var</span> <span class=nx>typeReg</span> <span class=p>=</span> <span class=nx>regexp</span><span class=p>.</span><span class=nf>MustCompile</span><span class=p>(</span><span class=s>`\[CQ:(\w+)`</span><span class=p>)</span>
+<span class=kd>var</span> <span class=nx>paramReg</span> <span class=p>=</span> <span class=nx>regexp</span><span class=p>.</span><span class=nf>MustCompile</span><span class=p>(</span><span class=s>`,([\w\-.]+?)=([^,\]]+)`</span><span class=p>)</span>
+</code></pre></td></tr></table>
+</div>
+</div><h3 id=自动机解析>自动机解析</h3>
 <p>使用正则表达式可以获得比较高的通用性，可读性，可维护性，但是为了压榨性能，手写自动机就是优化解析的重要途经。
 Mrs4s大佬给出了一份自动机解析的实现<a href=https://github.com/Mrs4s/go-cqhttp/blob/93d0d87fbb58adc3183622b096559f607e12ab23/coolq/cqcode.go#L320 target=_blank rel="noopener noreffer">[2]</a></p>
 <h2 id=优化加速>优化加速</h2>
 <p>在上一版自动机中，效率比正则表达式提高了 <code>30%</code> ，但这对于性能压榨还不够彻底，于是我便开始了优化之路。</p>
 <p>优化后的初稿如下</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=ln> 1</span><span class=kd>func</span> <span class=nf>ParseCQCode</span><span class=p>(</span><span class=nx>s</span> <span class=kt>string</span><span class=p>)</span> <span class=nx>Message</span> <span class=p>{</span>
-<span class=ln> 2</span>    <span class=kd>var</span> <span class=nx>d</span> <span class=p>=</span> <span class=kd>map</span><span class=p>[</span><span class=kt>string</span><span class=p>]</span><span class=kt>string</span><span class=p>{}</span> <span class=c1>// parameters
-</span><span class=ln> 3</span><span class=c1></span>    <span class=kd>var</span> <span class=nx>key</span><span class=p>,</span> <span class=nx>Type</span> <span class=p>=</span> <span class=s>&#34;&#34;</span><span class=p>,</span> <span class=s>&#34;&#34;</span>
-<span class=ln> 4</span>    <span class=nx>l</span> <span class=o>:=</span> <span class=nb>len</span><span class=p>(</span><span class=nx>s</span><span class=p>)</span>
-<span class=ln> 5</span>    <span class=nx>i</span><span class=p>,</span> <span class=nx>j</span> <span class=o>:=</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>0</span>
-<span class=ln> 6</span><span class=nx>S1</span><span class=p>:</span> <span class=c1>// Plain Text
-</span><span class=ln> 7</span><span class=c1></span>    <span class=k>for</span> <span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>l</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
-<span class=ln> 8</span>        <span class=k>if</span> <span class=nx>s</span><span class=p>[</span><span class=nx>i</span><span class=p>]</span> <span class=o>==</span> <span class=sc>&#39;[&#39;</span> <span class=o>&amp;&amp;</span> <span class=nx>s</span><span class=p>[</span><span class=nx>i</span><span class=p>:</span><span class=nx>i</span><span class=o>+</span><span class=mi>4</span><span class=p>]</span> <span class=o>==</span> <span class=s>&#34;[CQ:&#34;</span> <span class=p>{</span>
-<span class=ln> 9</span>            <span class=k>if</span> <span class=nx>i</span> <span class=p>&gt;</span> <span class=nx>j</span> <span class=p>{</span>
-<span class=ln>10</span>                <span class=nf>saveText</span><span class=p>(</span><span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>])</span>
-<span class=ln>11</span>            <span class=p>}</span>
-<span class=ln>12</span>            <span class=nx>i</span> <span class=o>+=</span> <span class=mi>4</span>
-<span class=ln>13</span>            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
-<span class=ln>14</span>            <span class=k>goto</span> <span class=nx>S2</span>
-<span class=ln>15</span>        <span class=p>}</span>
-<span class=ln>16</span>    <span class=p>}</span>
-<span class=ln>17</span>    <span class=k>goto</span> <span class=nx>End</span>
-<span class=ln>18</span><span class=nx>S2</span><span class=p>:</span> <span class=c1>// CQCode Type
-</span><span class=ln>19</span><span class=c1></span>    <span class=nx>d</span> <span class=p>=</span> <span class=kd>map</span><span class=p>[</span><span class=kt>string</span><span class=p>]</span><span class=kt>string</span><span class=p>{}</span>
-<span class=ln>20</span>    <span class=k>for</span> <span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>l</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
-<span class=ln>21</span>        <span class=k>switch</span> <span class=nx>s</span><span class=p>[</span><span class=nx>i</span><span class=p>]</span> <span class=p>{</span>
-<span class=ln>22</span>        <span class=k>case</span> <span class=sc>&#39;,&#39;</span><span class=p>:</span> <span class=c1>// CQ Code with params
-</span><span class=ln>23</span><span class=c1></span>            <span class=nx>Type</span> <span class=p>=</span> <span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>]</span>
-<span class=ln>24</span>            <span class=nx>i</span><span class=o>++</span>
-<span class=ln>25</span>            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
-<span class=ln>26</span>            <span class=k>goto</span> <span class=nx>S3</span>
-<span class=ln>27</span>        <span class=k>case</span> <span class=sc>&#39;]&#39;</span><span class=p>:</span> <span class=c1>// CQ Code without params
-</span><span class=ln>28</span><span class=c1></span>            <span class=nx>Type</span> <span class=p>=</span> <span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>]</span>
-<span class=ln>29</span>            <span class=nx>i</span><span class=o>++</span>
-<span class=ln>30</span>            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
-<span class=ln>31</span>            <span class=nf>saveCQCode</span><span class=p>()</span>
-<span class=ln>32</span>            <span class=k>goto</span> <span class=nx>S1</span>
-<span class=ln>33</span>        <span class=p>}</span>
-<span class=ln>34</span>    <span class=p>}</span>
-<span class=ln>35</span>    <span class=k>goto</span> <span class=nx>End</span>
-<span class=ln>36</span><span class=nx>S3</span><span class=p>:</span> <span class=c1>// CQCode param key
-</span><span class=ln>37</span><span class=c1></span>    <span class=k>for</span> <span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>l</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
-<span class=ln>38</span>        <span class=k>if</span> <span class=nx>s</span><span class=p>[</span><span class=nx>i</span><span class=p>]</span> <span class=o>==</span> <span class=sc>&#39;=&#39;</span> <span class=p>{</span>
-<span class=ln>39</span>            <span class=nx>key</span> <span class=p>=</span> <span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>]</span>
-<span class=ln>40</span>            <span class=nx>i</span><span class=o>++</span>
-<span class=ln>41</span>            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
-<span class=ln>42</span>            <span class=k>goto</span> <span class=nx>S4</span>
-<span class=ln>43</span>        <span class=p>}</span>
-<span class=ln>44</span>    <span class=p>}</span>
-<span class=ln>45</span>    <span class=k>goto</span> <span class=nx>End</span>
-<span class=ln>46</span><span class=nx>S4</span><span class=p>:</span> <span class=c1>// CQCode param value
-</span><span class=ln>47</span><span class=c1></span>    <span class=k>for</span> <span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>l</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
-<span class=ln>48</span>        <span class=k>switch</span> <span class=nx>s</span><span class=p>[</span><span class=nx>i</span><span class=p>]</span> <span class=p>{</span>
-<span class=ln>49</span>        <span class=k>case</span> <span class=sc>&#39;,&#39;</span><span class=p>:</span> <span class=c1>// more param
-</span><span class=ln>50</span><span class=c1></span>            <span class=nx>d</span><span class=p>[</span><span class=nx>key</span><span class=p>]</span> <span class=p>=</span> <span class=nf>CQCodeUnescapeValue</span><span class=p>(</span><span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>])</span>
-<span class=ln>51</span>            <span class=nx>i</span><span class=o>++</span>
-<span class=ln>52</span>            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
-<span class=ln>53</span>            <span class=k>goto</span> <span class=nx>S3</span>
-<span class=ln>54</span>        <span class=k>case</span> <span class=sc>&#39;]&#39;</span><span class=p>:</span>
-<span class=ln>55</span>            <span class=nx>d</span><span class=p>[</span><span class=nx>key</span><span class=p>]</span> <span class=p>=</span> <span class=nf>CQCodeUnescapeValue</span><span class=p>(</span><span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>])</span>
-<span class=ln>56</span>            <span class=nx>i</span><span class=o>++</span>
-<span class=ln>57</span>            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
-<span class=ln>58</span>            <span class=nf>saveCQCode</span><span class=p>()</span>
-<span class=ln>59</span>            <span class=k>goto</span> <span class=nx>S1</span>
-<span class=ln>60</span>        <span class=p>}</span>
-<span class=ln>61</span>    <span class=p>}</span>
-<span class=ln>62</span>    <span class=k>goto</span> <span class=nx>End</span>
-<span class=ln>63</span><span class=nx>End</span><span class=p>:</span>
-<span class=ln>64</span>    <span class=k>if</span> <span class=nx>i</span> <span class=p>&gt;</span> <span class=nx>j</span> <span class=p>{</span>
-<span class=ln>65</span>        <span class=nf>saveText</span><span class=p>(</span><span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>])</span>
-<span class=ln>66</span>    <span class=p>}</span>
-<span class=ln>67</span><span class=p>}</span>
-</code></pre></div><h3 id=去除不必要的转换>去除不必要的转换</h3>
+<div class=highlight><div class=chroma>
+<table class=lntable><tr><td class=lntd>
+<pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span><span class=lnt>48
+</span><span class=lnt>49
+</span><span class=lnt>50
+</span><span class=lnt>51
+</span><span class=lnt>52
+</span><span class=lnt>53
+</span><span class=lnt>54
+</span><span class=lnt>55
+</span><span class=lnt>56
+</span><span class=lnt>57
+</span><span class=lnt>58
+</span><span class=lnt>59
+</span><span class=lnt>60
+</span><span class=lnt>61
+</span><span class=lnt>62
+</span><span class=lnt>63
+</span><span class=lnt>64
+</span><span class=lnt>65
+</span><span class=lnt>66
+</span><span class=lnt>67
+</span></code></pre></td>
+<td class=lntd>
+<pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=kd>func</span> <span class=nf>ParseCQCode</span><span class=p>(</span><span class=nx>s</span> <span class=kt>string</span><span class=p>)</span> <span class=nx>Message</span> <span class=p>{</span>
+    <span class=kd>var</span> <span class=nx>d</span> <span class=p>=</span> <span class=kd>map</span><span class=p>[</span><span class=kt>string</span><span class=p>]</span><span class=kt>string</span><span class=p>{}</span> <span class=c1>// parameters
+</span><span class=c1></span>    <span class=kd>var</span> <span class=nx>key</span><span class=p>,</span> <span class=nx>Type</span> <span class=p>=</span> <span class=s>&#34;&#34;</span><span class=p>,</span> <span class=s>&#34;&#34;</span>
+    <span class=nx>l</span> <span class=o>:=</span> <span class=nb>len</span><span class=p>(</span><span class=nx>s</span><span class=p>)</span>
+    <span class=nx>i</span><span class=p>,</span> <span class=nx>j</span> <span class=o>:=</span> <span class=mi>0</span><span class=p>,</span> <span class=mi>0</span>
+<span class=nx>S1</span><span class=p>:</span> <span class=c1>// Plain Text
+</span><span class=c1></span>    <span class=k>for</span> <span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>l</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
+        <span class=k>if</span> <span class=nx>s</span><span class=p>[</span><span class=nx>i</span><span class=p>]</span> <span class=o>==</span> <span class=sc>&#39;[&#39;</span> <span class=o>&amp;&amp;</span> <span class=nx>s</span><span class=p>[</span><span class=nx>i</span><span class=p>:</span><span class=nx>i</span><span class=o>+</span><span class=mi>4</span><span class=p>]</span> <span class=o>==</span> <span class=s>&#34;[CQ:&#34;</span> <span class=p>{</span>
+            <span class=k>if</span> <span class=nx>i</span> <span class=p>&gt;</span> <span class=nx>j</span> <span class=p>{</span>
+                <span class=nf>saveText</span><span class=p>(</span><span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>])</span>
+            <span class=p>}</span>
+            <span class=nx>i</span> <span class=o>+=</span> <span class=mi>4</span>
+            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
+            <span class=k>goto</span> <span class=nx>S2</span>
+        <span class=p>}</span>
+    <span class=p>}</span>
+    <span class=k>goto</span> <span class=nx>End</span>
+<span class=nx>S2</span><span class=p>:</span> <span class=c1>// CQCode Type
+</span><span class=c1></span>    <span class=nx>d</span> <span class=p>=</span> <span class=kd>map</span><span class=p>[</span><span class=kt>string</span><span class=p>]</span><span class=kt>string</span><span class=p>{}</span>
+    <span class=k>for</span> <span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>l</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
+        <span class=k>switch</span> <span class=nx>s</span><span class=p>[</span><span class=nx>i</span><span class=p>]</span> <span class=p>{</span>
+        <span class=k>case</span> <span class=sc>&#39;,&#39;</span><span class=p>:</span> <span class=c1>// CQ Code with params
+</span><span class=c1></span>            <span class=nx>Type</span> <span class=p>=</span> <span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>]</span>
+            <span class=nx>i</span><span class=o>++</span>
+            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
+            <span class=k>goto</span> <span class=nx>S3</span>
+        <span class=k>case</span> <span class=sc>&#39;]&#39;</span><span class=p>:</span> <span class=c1>// CQ Code without params
+</span><span class=c1></span>            <span class=nx>Type</span> <span class=p>=</span> <span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>]</span>
+            <span class=nx>i</span><span class=o>++</span>
+            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
+            <span class=nf>saveCQCode</span><span class=p>()</span>
+            <span class=k>goto</span> <span class=nx>S1</span>
+        <span class=p>}</span>
+    <span class=p>}</span>
+    <span class=k>goto</span> <span class=nx>End</span>
+<span class=nx>S3</span><span class=p>:</span> <span class=c1>// CQCode param key
+</span><span class=c1></span>    <span class=k>for</span> <span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>l</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
+        <span class=k>if</span> <span class=nx>s</span><span class=p>[</span><span class=nx>i</span><span class=p>]</span> <span class=o>==</span> <span class=sc>&#39;=&#39;</span> <span class=p>{</span>
+            <span class=nx>key</span> <span class=p>=</span> <span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>]</span>
+            <span class=nx>i</span><span class=o>++</span>
+            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
+            <span class=k>goto</span> <span class=nx>S4</span>
+        <span class=p>}</span>
+    <span class=p>}</span>
+    <span class=k>goto</span> <span class=nx>End</span>
+<span class=nx>S4</span><span class=p>:</span> <span class=c1>// CQCode param value
+</span><span class=c1></span>    <span class=k>for</span> <span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>l</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
+        <span class=k>switch</span> <span class=nx>s</span><span class=p>[</span><span class=nx>i</span><span class=p>]</span> <span class=p>{</span>
+        <span class=k>case</span> <span class=sc>&#39;,&#39;</span><span class=p>:</span> <span class=c1>// more param
+</span><span class=c1></span>            <span class=nx>d</span><span class=p>[</span><span class=nx>key</span><span class=p>]</span> <span class=p>=</span> <span class=nf>CQCodeUnescapeValue</span><span class=p>(</span><span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>])</span>
+            <span class=nx>i</span><span class=o>++</span>
+            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
+            <span class=k>goto</span> <span class=nx>S3</span>
+        <span class=k>case</span> <span class=sc>&#39;]&#39;</span><span class=p>:</span>
+            <span class=nx>d</span><span class=p>[</span><span class=nx>key</span><span class=p>]</span> <span class=p>=</span> <span class=nf>CQCodeUnescapeValue</span><span class=p>(</span><span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>])</span>
+            <span class=nx>i</span><span class=o>++</span>
+            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
+            <span class=nf>saveCQCode</span><span class=p>()</span>
+            <span class=k>goto</span> <span class=nx>S1</span>
+        <span class=p>}</span>
+    <span class=p>}</span>
+    <span class=k>goto</span> <span class=nx>End</span>
+<span class=nx>End</span><span class=p>:</span>
+    <span class=k>if</span> <span class=nx>i</span> <span class=p>&gt;</span> <span class=nx>j</span> <span class=p>{</span>
+        <span class=nf>saveText</span><span class=p>(</span><span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>])</span>
+    <span class=p>}</span>
+<span class=p>}</span>
+</code></pre></td></tr></table>
+</div>
+</div><h3 id=去除不必要的转换>去除不必要的转换</h3>
 <p>在上一版自动机中，将整个字符串转换成了 <code>[]rune</code> ，观察到 CQ 码的结构中只含有 ASCII 字符，根据 <code>UTF-8</code> 的性质，
 所有的非 ASCII 字符的个个字节都大于128，所以对于解析CQ码，我们并不需要将字符串转换成 <code>[]rune</code> 。</p>
 <h3 id=设计一个更全面的状态机>设计一个更全面的状态机</h3>
@@ -232,28 +340,62 @@ CQ码的解析。</p>
 <p>Go语言是一门内存安全的语言，程序运行过程中会进行边界检查，这对程序的稳定避免发生更严重的错误很重要，但是有些情况下，
 我们可以保证一定不会发生数组(切片)越界，这时边界检查就变得多余了。</p>
 <p>在 Go 编译器中，实现了对某些情况的边界检查消除，例如标准库<code>encoding/binary</code>中</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=ln>1</span><span class=kd>func</span> <span class=p>(</span><span class=nx>littleEndian</span><span class=p>)</span> <span class=nf>PutUint32</span><span class=p>(</span><span class=nx>b</span> <span class=p>[]</span><span class=kt>byte</span><span class=p>,</span> <span class=nx>v</span> <span class=kt>uint32</span><span class=p>)</span> <span class=p>{</span>
-<span class=ln>2</span>    <span class=nx>_</span> <span class=p>=</span> <span class=nx>b</span><span class=p>[</span><span class=mi>3</span><span class=p>]</span> <span class=c1>// early bounds check to guarantee safety of writes below
-</span><span class=ln>3</span><span class=c1></span>    <span class=nx>b</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=p>=</span> <span class=nb>byte</span><span class=p>(</span><span class=nx>v</span><span class=p>)</span>
-<span class=ln>4</span>    <span class=nx>b</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span> <span class=p>=</span> <span class=nb>byte</span><span class=p>(</span><span class=nx>v</span> <span class=o>&gt;&gt;</span> <span class=mi>8</span><span class=p>)</span>
-<span class=ln>5</span>    <span class=nx>b</span><span class=p>[</span><span class=mi>2</span><span class=p>]</span> <span class=p>=</span> <span class=nb>byte</span><span class=p>(</span><span class=nx>v</span> <span class=o>&gt;&gt;</span> <span class=mi>16</span><span class=p>)</span>
-<span class=ln>6</span>    <span class=nx>b</span><span class=p>[</span><span class=mi>3</span><span class=p>]</span> <span class=p>=</span> <span class=nb>byte</span><span class=p>(</span><span class=nx>v</span> <span class=o>&gt;&gt;</span> <span class=mi>24</span><span class=p>)</span>
-<span class=ln>7</span><span class=p>}</span>
-</code></pre></div><p>在第二行中，提前检查了边界，Go编译器就会对后续的4行操作不进行边界检查。
+<div class=highlight><div class=chroma>
+<table class=lntable><tr><td class=lntd>
+<pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span></code></pre></td>
+<td class=lntd>
+<pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=kd>func</span> <span class=p>(</span><span class=nx>littleEndian</span><span class=p>)</span> <span class=nf>PutUint32</span><span class=p>(</span><span class=nx>b</span> <span class=p>[]</span><span class=kt>byte</span><span class=p>,</span> <span class=nx>v</span> <span class=kt>uint32</span><span class=p>)</span> <span class=p>{</span>
+    <span class=nx>_</span> <span class=p>=</span> <span class=nx>b</span><span class=p>[</span><span class=mi>3</span><span class=p>]</span> <span class=c1>// early bounds check to guarantee safety of writes below
+</span><span class=c1></span>    <span class=nx>b</span><span class=p>[</span><span class=mi>0</span><span class=p>]</span> <span class=p>=</span> <span class=nb>byte</span><span class=p>(</span><span class=nx>v</span><span class=p>)</span>
+    <span class=nx>b</span><span class=p>[</span><span class=mi>1</span><span class=p>]</span> <span class=p>=</span> <span class=nb>byte</span><span class=p>(</span><span class=nx>v</span> <span class=o>&gt;&gt;</span> <span class=mi>8</span><span class=p>)</span>
+    <span class=nx>b</span><span class=p>[</span><span class=mi>2</span><span class=p>]</span> <span class=p>=</span> <span class=nb>byte</span><span class=p>(</span><span class=nx>v</span> <span class=o>&gt;&gt;</span> <span class=mi>16</span><span class=p>)</span>
+    <span class=nx>b</span><span class=p>[</span><span class=mi>3</span><span class=p>]</span> <span class=p>=</span> <span class=nb>byte</span><span class=p>(</span><span class=nx>v</span> <span class=o>&gt;&gt;</span> <span class=mi>24</span><span class=p>)</span>
+<span class=p>}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>在第二行中，提前检查了边界，Go编译器就会对后续的4行操作不进行边界检查。
 Go对边界检查消除优化还不够全面，往往需要我们手动提示编译器进行边界检查消除。</p>
 <p>例如下面代码中，对<code>is</code>的范围进行暗示</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=ln>1</span><span class=kd>func</span> <span class=nf>foo</span><span class=p>(</span><span class=nx>is</span> <span class=p>[]</span><span class=kt>int</span><span class=p>,</span> <span class=nx>bs</span> <span class=p>[]</span><span class=kt>byte</span><span class=p>)</span> <span class=p>{</span>
-<span class=ln>2</span>    <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=nx>is</span><span class=p>)</span> <span class=o>&gt;=</span> <span class=mi>256</span> <span class=p>{</span>
-<span class=ln>3</span>        <span class=nx>is</span> <span class=p>=</span> <span class=nx>is</span><span class=p>[:</span><span class=mi>256</span><span class=p>]</span> <span class=c1>// 给编译器一个暗示
-</span><span class=ln>4</span><span class=c1></span>        <span class=k>for</span> <span class=nx>_</span><span class=p>,</span> <span class=nx>n</span> <span class=o>:=</span> <span class=k>range</span> <span class=nx>bs</span> <span class=p>{</span>
-<span class=ln>5</span>            <span class=nx>_</span> <span class=p>=</span> <span class=nx>is</span><span class=p>[</span><span class=nx>n</span><span class=p>]</span> <span class=c1>// 边界检查消除了！
-</span><span class=ln>6</span><span class=c1></span>        <span class=p>}</span>
-<span class=ln>7</span>    <span class=p>}</span>
-<span class=ln>8</span><span class=p>}</span>
-</code></pre></div><p>虽然我重写了一遍状态机，
+<div class=highlight><div class=chroma>
+<table class=lntable><tr><td class=lntd>
+<pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span><span class=lnt>8
+</span></code></pre></td>
+<td class=lntd>
+<pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=kd>func</span> <span class=nf>foo</span><span class=p>(</span><span class=nx>is</span> <span class=p>[]</span><span class=kt>int</span><span class=p>,</span> <span class=nx>bs</span> <span class=p>[]</span><span class=kt>byte</span><span class=p>)</span> <span class=p>{</span>
+    <span class=k>if</span> <span class=nb>len</span><span class=p>(</span><span class=nx>is</span><span class=p>)</span> <span class=o>&gt;=</span> <span class=mi>256</span> <span class=p>{</span>
+        <span class=nx>is</span> <span class=p>=</span> <span class=nx>is</span><span class=p>[:</span><span class=mi>256</span><span class=p>]</span> <span class=c1>// 给编译器一个暗示
+</span><span class=c1></span>        <span class=k>for</span> <span class=nx>_</span><span class=p>,</span> <span class=nx>n</span> <span class=o>:=</span> <span class=k>range</span> <span class=nx>bs</span> <span class=p>{</span>
+            <span class=nx>_</span> <span class=p>=</span> <span class=nx>is</span><span class=p>[</span><span class=nx>n</span><span class=p>]</span> <span class=c1>// 边界检查消除了！
+</span><span class=c1></span>        <span class=p>}</span>
+    <span class=p>}</span>
+<span class=p>}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>虽然我重写了一遍状态机，
 为了探究性能并无很大提升的原因，我使用了</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-shell data-lang=shell><span class=ln>1</span>go build -gcflags<span class=o>=</span><span class=s2>&#34;-d=ssa/check_bce/debug=1&#34;</span>
-</code></pre></div><p>查找了代码中所有的边界检查，结果发现代码中几乎所有切片操作都进行了边界检查，
+<div class=highlight><div class=chroma>
+<table class=lntable><tr><td class=lntd>
+<pre tabindex=0 class=chroma><code><span class=lnt>1
+</span></code></pre></td>
+<td class=lntd>
+<pre tabindex=0 class=chroma><code class=language-shell data-lang=shell>go build -gcflags<span class=o>=</span><span class=s2>&#34;-d=ssa/check_bce/debug=1&#34;</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>查找了代码中所有的边界检查，结果发现代码中几乎所有切片操作都进行了边界检查，
 同时，在我的自动机实现代码中，保证了索引一定不会越界 (<code>i &lt; l</code>)，于是我尝试给编译器一定
 提示，尝试消除边界检查。</p>
 <p>不幸的是，我尝试了已知的所有 Hint 手段，编译器始终不能进行边界检查消除，这时候我选择
@@ -270,85 +412,170 @@ Go对边界检查消除优化还不够全面，往往需要我们手动提示编
 </div>
 </div>
 <p>使用了unsafe操作后的代码如下</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=ln> 1</span><span class=c1>// add 指针运算
-</span><span class=ln> 2</span><span class=c1></span><span class=nx>add</span> <span class=o>:=</span> <span class=kd>func</span><span class=p>(</span><span class=nx>ptr</span> <span class=nx>unsafe</span><span class=p>.</span><span class=nx>Pointer</span><span class=p>,</span> <span class=nx>offset</span> <span class=kt>uintptr</span><span class=p>)</span> <span class=nx>unsafe</span><span class=p>.</span><span class=nx>Pointer</span> <span class=p>{</span>
-<span class=ln> 3</span>    <span class=k>return</span> <span class=nx>unsafe</span><span class=p>.</span><span class=nf>Pointer</span><span class=p>(</span><span class=nb>uintptr</span><span class=p>(</span><span class=nx>ptr</span><span class=p>)</span> <span class=o>+</span> <span class=nx>offset</span><span class=p>)</span>
-<span class=ln> 4</span><span class=p>}</span>
-<span class=ln> 5</span>
-<span class=ln> 6</span><span class=nx>S1</span><span class=p>:</span> <span class=c1>// Plain Text
-</span><span class=ln> 7</span><span class=c1></span>    <span class=k>for</span> <span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>l</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
-<span class=ln> 8</span>        <span class=k>if</span> <span class=o>*</span><span class=p>(</span><span class=o>*</span><span class=kt>byte</span><span class=p>)(</span><span class=nf>add</span><span class=p>(</span><span class=nx>ptr</span><span class=p>,</span> <span class=nb>uintptr</span><span class=p>(</span><span class=nx>i</span><span class=p>)))</span> <span class=o>==</span> <span class=sc>&#39;[&#39;</span> <span class=o>&amp;&amp;</span> <span class=nx>i</span><span class=o>+</span><span class=mi>4</span> <span class=p>&lt;</span> <span class=nx>l</span> <span class=o>&amp;&amp;</span>
-<span class=ln> 9</span>            <span class=o>*</span><span class=p>(</span><span class=o>*</span><span class=kt>uint32</span><span class=p>)(</span><span class=nf>add</span><span class=p>(</span><span class=nx>ptr</span><span class=p>,</span> <span class=nb>uintptr</span><span class=p>(</span><span class=nx>i</span><span class=p>)))</span> <span class=o>==</span> <span class=nx>magicCQ</span> <span class=p>{</span> <span class=c1>// Magic :uint32([]byte(&#34;[CQ:&#34;))
-</span><span class=ln>10</span><span class=c1></span>            <span class=k>if</span> <span class=nx>i</span> <span class=p>&gt;</span> <span class=nx>j</span> <span class=p>{</span>
-<span class=ln>11</span>                <span class=nf>saveText</span><span class=p>(</span><span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>])</span>
-<span class=ln>12</span>            <span class=p>}</span>
-<span class=ln>13</span>            <span class=nx>i</span> <span class=o>+=</span> <span class=mi>4</span>
-<span class=ln>14</span>            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
-<span class=ln>15</span>            <span class=k>goto</span> <span class=nx>S2</span>
-<span class=ln>16</span>        <span class=p>}</span>
-<span class=ln>17</span>    <span class=p>}</span>
-<span class=ln>18</span>    <span class=k>goto</span> <span class=nx>End</span>
-<span class=ln>19</span><span class=nx>S2</span><span class=p>:</span> <span class=c1>// CQCode Type
-</span><span class=ln>20</span><span class=c1></span>    <span class=nx>d</span> <span class=p>=</span> <span class=kd>map</span><span class=p>[</span><span class=kt>string</span><span class=p>]</span><span class=kt>string</span><span class=p>{}</span>
-<span class=ln>21</span>    <span class=k>for</span> <span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>l</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
-<span class=ln>22</span>        <span class=k>switch</span> <span class=o>*</span><span class=p>(</span><span class=o>*</span><span class=kt>byte</span><span class=p>)(</span><span class=nf>add</span><span class=p>(</span><span class=nx>ptr</span><span class=p>,</span> <span class=nb>uintptr</span><span class=p>(</span><span class=nx>i</span><span class=p>)))</span> <span class=p>{</span>
-<span class=ln>23</span>        <span class=k>case</span> <span class=sc>&#39;,&#39;</span><span class=p>:</span> <span class=c1>// CQ Code with params
-</span><span class=ln>24</span><span class=c1></span>            <span class=nx>Type</span> <span class=p>=</span> <span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>]</span>
-<span class=ln>25</span>            <span class=nx>i</span><span class=o>++</span>
-<span class=ln>26</span>            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
-<span class=ln>27</span>            <span class=k>goto</span> <span class=nx>S3</span>
-<span class=ln>28</span>        <span class=k>case</span> <span class=sc>&#39;]&#39;</span><span class=p>:</span> <span class=c1>// CQ Code without params
-</span><span class=ln>29</span><span class=c1></span>            <span class=nx>Type</span> <span class=p>=</span> <span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>]</span>
-<span class=ln>30</span>            <span class=nx>i</span><span class=o>++</span>
-<span class=ln>31</span>            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
-<span class=ln>32</span>            <span class=nf>saveCQCode</span><span class=p>()</span>
-<span class=ln>33</span>            <span class=k>goto</span> <span class=nx>S1</span>
-<span class=ln>34</span>        <span class=p>}</span>
-<span class=ln>35</span>    <span class=p>}</span>
-<span class=ln>36</span>    <span class=k>goto</span> <span class=nx>End</span>
-<span class=ln>37</span><span class=nx>S3</span><span class=p>:</span> <span class=c1>// CQCode param key
-</span><span class=ln>38</span><span class=c1></span>    <span class=k>for</span> <span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>l</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
-<span class=ln>39</span>        <span class=k>if</span> <span class=o>*</span><span class=p>(</span><span class=o>*</span><span class=kt>byte</span><span class=p>)(</span><span class=nf>add</span><span class=p>(</span><span class=nx>ptr</span><span class=p>,</span> <span class=nb>uintptr</span><span class=p>(</span><span class=nx>i</span><span class=p>)))</span> <span class=o>==</span> <span class=sc>&#39;=&#39;</span> <span class=p>{</span>
-<span class=ln>40</span>            <span class=nx>key</span> <span class=p>=</span> <span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>]</span>
-<span class=ln>41</span>            <span class=nx>i</span><span class=o>++</span>
-<span class=ln>42</span>            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
-<span class=ln>43</span>            <span class=k>goto</span> <span class=nx>S4</span>
-<span class=ln>44</span>        <span class=p>}</span>
-<span class=ln>45</span>    <span class=p>}</span>
-<span class=ln>46</span>    <span class=k>goto</span> <span class=nx>End</span>
-<span class=ln>47</span><span class=nx>S4</span><span class=p>:</span> <span class=c1>// CQCode param value
-</span><span class=ln>48</span><span class=c1></span>    <span class=k>for</span> <span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>l</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
-<span class=ln>49</span>        <span class=k>switch</span> <span class=o>*</span><span class=p>(</span><span class=o>*</span><span class=kt>byte</span><span class=p>)(</span><span class=nf>add</span><span class=p>(</span><span class=nx>ptr</span><span class=p>,</span> <span class=nb>uintptr</span><span class=p>(</span><span class=nx>i</span><span class=p>)))</span> <span class=p>{</span>
-<span class=ln>50</span>        <span class=k>case</span> <span class=sc>&#39;,&#39;</span><span class=p>:</span> <span class=c1>// more param
-</span><span class=ln>51</span><span class=c1></span>            <span class=nx>d</span><span class=p>[</span><span class=nx>key</span><span class=p>]</span> <span class=p>=</span> <span class=nf>CQCodeUnescapeValue</span><span class=p>(</span><span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>])</span>
-<span class=ln>52</span>            <span class=nx>i</span><span class=o>++</span>
-<span class=ln>53</span>            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
-<span class=ln>54</span>            <span class=k>goto</span> <span class=nx>S3</span>
-<span class=ln>55</span>        <span class=k>case</span> <span class=sc>&#39;]&#39;</span><span class=p>:</span>
-<span class=ln>56</span>            <span class=nx>d</span><span class=p>[</span><span class=nx>key</span><span class=p>]</span> <span class=p>=</span> <span class=nf>CQCodeUnescapeValue</span><span class=p>(</span><span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>])</span>
-<span class=ln>57</span>            <span class=nx>i</span><span class=o>++</span>
-<span class=ln>58</span>            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
-<span class=ln>59</span>            <span class=nf>saveCQCode</span><span class=p>()</span>
-<span class=ln>60</span>            <span class=k>goto</span> <span class=nx>S1</span>
-<span class=ln>61</span>        <span class=p>}</span>
-<span class=ln>62</span>    <span class=p>}</span>
-<span class=ln>63</span>    <span class=k>goto</span> <span class=nx>End</span>
-<span class=ln>64</span><span class=nx>End</span><span class=p>:</span>
-<span class=ln>65</span>    <span class=k>if</span> <span class=nx>i</span> <span class=p>&gt;</span> <span class=nx>j</span> <span class=p>{</span>
-<span class=ln>66</span>        <span class=nf>saveText</span><span class=p>(</span><span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>])</span>
-<span class=ln>67</span>    <span class=p>}</span>
-<span class=ln>68</span>    <span class=k>return</span>
-</code></pre></div><p>同时，我将判断是否是CQ码头 <code>"[CQ:"</code> 改成了用 <code>uint32</code> 进行比较(与大小端有关),进一步优化了性能.
+<div class=highlight><div class=chroma>
+<table class=lntable><tr><td class=lntd>
+<pre tabindex=0 class=chroma><code><span class=lnt> 1
+</span><span class=lnt> 2
+</span><span class=lnt> 3
+</span><span class=lnt> 4
+</span><span class=lnt> 5
+</span><span class=lnt> 6
+</span><span class=lnt> 7
+</span><span class=lnt> 8
+</span><span class=lnt> 9
+</span><span class=lnt>10
+</span><span class=lnt>11
+</span><span class=lnt>12
+</span><span class=lnt>13
+</span><span class=lnt>14
+</span><span class=lnt>15
+</span><span class=lnt>16
+</span><span class=lnt>17
+</span><span class=lnt>18
+</span><span class=lnt>19
+</span><span class=lnt>20
+</span><span class=lnt>21
+</span><span class=lnt>22
+</span><span class=lnt>23
+</span><span class=lnt>24
+</span><span class=lnt>25
+</span><span class=lnt>26
+</span><span class=lnt>27
+</span><span class=lnt>28
+</span><span class=lnt>29
+</span><span class=lnt>30
+</span><span class=lnt>31
+</span><span class=lnt>32
+</span><span class=lnt>33
+</span><span class=lnt>34
+</span><span class=lnt>35
+</span><span class=lnt>36
+</span><span class=lnt>37
+</span><span class=lnt>38
+</span><span class=lnt>39
+</span><span class=lnt>40
+</span><span class=lnt>41
+</span><span class=lnt>42
+</span><span class=lnt>43
+</span><span class=lnt>44
+</span><span class=lnt>45
+</span><span class=lnt>46
+</span><span class=lnt>47
+</span><span class=lnt>48
+</span><span class=lnt>49
+</span><span class=lnt>50
+</span><span class=lnt>51
+</span><span class=lnt>52
+</span><span class=lnt>53
+</span><span class=lnt>54
+</span><span class=lnt>55
+</span><span class=lnt>56
+</span><span class=lnt>57
+</span><span class=lnt>58
+</span><span class=lnt>59
+</span><span class=lnt>60
+</span><span class=lnt>61
+</span><span class=lnt>62
+</span><span class=lnt>63
+</span><span class=lnt>64
+</span><span class=lnt>65
+</span><span class=lnt>66
+</span><span class=lnt>67
+</span><span class=lnt>68
+</span></code></pre></td>
+<td class=lntd>
+<pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=c1>// add 指针运算
+</span><span class=c1></span><span class=nx>add</span> <span class=o>:=</span> <span class=kd>func</span><span class=p>(</span><span class=nx>ptr</span> <span class=nx>unsafe</span><span class=p>.</span><span class=nx>Pointer</span><span class=p>,</span> <span class=nx>offset</span> <span class=kt>uintptr</span><span class=p>)</span> <span class=nx>unsafe</span><span class=p>.</span><span class=nx>Pointer</span> <span class=p>{</span>
+    <span class=k>return</span> <span class=nx>unsafe</span><span class=p>.</span><span class=nf>Pointer</span><span class=p>(</span><span class=nb>uintptr</span><span class=p>(</span><span class=nx>ptr</span><span class=p>)</span> <span class=o>+</span> <span class=nx>offset</span><span class=p>)</span>
+<span class=p>}</span>
+
+<span class=nx>S1</span><span class=p>:</span> <span class=c1>// Plain Text
+</span><span class=c1></span>    <span class=k>for</span> <span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>l</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
+        <span class=k>if</span> <span class=o>*</span><span class=p>(</span><span class=o>*</span><span class=kt>byte</span><span class=p>)(</span><span class=nf>add</span><span class=p>(</span><span class=nx>ptr</span><span class=p>,</span> <span class=nb>uintptr</span><span class=p>(</span><span class=nx>i</span><span class=p>)))</span> <span class=o>==</span> <span class=sc>&#39;[&#39;</span> <span class=o>&amp;&amp;</span> <span class=nx>i</span><span class=o>+</span><span class=mi>4</span> <span class=p>&lt;</span> <span class=nx>l</span> <span class=o>&amp;&amp;</span>
+            <span class=o>*</span><span class=p>(</span><span class=o>*</span><span class=kt>uint32</span><span class=p>)(</span><span class=nf>add</span><span class=p>(</span><span class=nx>ptr</span><span class=p>,</span> <span class=nb>uintptr</span><span class=p>(</span><span class=nx>i</span><span class=p>)))</span> <span class=o>==</span> <span class=nx>magicCQ</span> <span class=p>{</span> <span class=c1>// Magic :uint32([]byte(&#34;[CQ:&#34;))
+</span><span class=c1></span>            <span class=k>if</span> <span class=nx>i</span> <span class=p>&gt;</span> <span class=nx>j</span> <span class=p>{</span>
+                <span class=nf>saveText</span><span class=p>(</span><span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>])</span>
+            <span class=p>}</span>
+            <span class=nx>i</span> <span class=o>+=</span> <span class=mi>4</span>
+            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
+            <span class=k>goto</span> <span class=nx>S2</span>
+        <span class=p>}</span>
+    <span class=p>}</span>
+    <span class=k>goto</span> <span class=nx>End</span>
+<span class=nx>S2</span><span class=p>:</span> <span class=c1>// CQCode Type
+</span><span class=c1></span>    <span class=nx>d</span> <span class=p>=</span> <span class=kd>map</span><span class=p>[</span><span class=kt>string</span><span class=p>]</span><span class=kt>string</span><span class=p>{}</span>
+    <span class=k>for</span> <span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>l</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
+        <span class=k>switch</span> <span class=o>*</span><span class=p>(</span><span class=o>*</span><span class=kt>byte</span><span class=p>)(</span><span class=nf>add</span><span class=p>(</span><span class=nx>ptr</span><span class=p>,</span> <span class=nb>uintptr</span><span class=p>(</span><span class=nx>i</span><span class=p>)))</span> <span class=p>{</span>
+        <span class=k>case</span> <span class=sc>&#39;,&#39;</span><span class=p>:</span> <span class=c1>// CQ Code with params
+</span><span class=c1></span>            <span class=nx>Type</span> <span class=p>=</span> <span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>]</span>
+            <span class=nx>i</span><span class=o>++</span>
+            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
+            <span class=k>goto</span> <span class=nx>S3</span>
+        <span class=k>case</span> <span class=sc>&#39;]&#39;</span><span class=p>:</span> <span class=c1>// CQ Code without params
+</span><span class=c1></span>            <span class=nx>Type</span> <span class=p>=</span> <span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>]</span>
+            <span class=nx>i</span><span class=o>++</span>
+            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
+            <span class=nf>saveCQCode</span><span class=p>()</span>
+            <span class=k>goto</span> <span class=nx>S1</span>
+        <span class=p>}</span>
+    <span class=p>}</span>
+    <span class=k>goto</span> <span class=nx>End</span>
+<span class=nx>S3</span><span class=p>:</span> <span class=c1>// CQCode param key
+</span><span class=c1></span>    <span class=k>for</span> <span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>l</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
+        <span class=k>if</span> <span class=o>*</span><span class=p>(</span><span class=o>*</span><span class=kt>byte</span><span class=p>)(</span><span class=nf>add</span><span class=p>(</span><span class=nx>ptr</span><span class=p>,</span> <span class=nb>uintptr</span><span class=p>(</span><span class=nx>i</span><span class=p>)))</span> <span class=o>==</span> <span class=sc>&#39;=&#39;</span> <span class=p>{</span>
+            <span class=nx>key</span> <span class=p>=</span> <span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>]</span>
+            <span class=nx>i</span><span class=o>++</span>
+            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
+            <span class=k>goto</span> <span class=nx>S4</span>
+        <span class=p>}</span>
+    <span class=p>}</span>
+    <span class=k>goto</span> <span class=nx>End</span>
+<span class=nx>S4</span><span class=p>:</span> <span class=c1>// CQCode param value
+</span><span class=c1></span>    <span class=k>for</span> <span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>l</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
+        <span class=k>switch</span> <span class=o>*</span><span class=p>(</span><span class=o>*</span><span class=kt>byte</span><span class=p>)(</span><span class=nf>add</span><span class=p>(</span><span class=nx>ptr</span><span class=p>,</span> <span class=nb>uintptr</span><span class=p>(</span><span class=nx>i</span><span class=p>)))</span> <span class=p>{</span>
+        <span class=k>case</span> <span class=sc>&#39;,&#39;</span><span class=p>:</span> <span class=c1>// more param
+</span><span class=c1></span>            <span class=nx>d</span><span class=p>[</span><span class=nx>key</span><span class=p>]</span> <span class=p>=</span> <span class=nf>CQCodeUnescapeValue</span><span class=p>(</span><span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>])</span>
+            <span class=nx>i</span><span class=o>++</span>
+            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
+            <span class=k>goto</span> <span class=nx>S3</span>
+        <span class=k>case</span> <span class=sc>&#39;]&#39;</span><span class=p>:</span>
+            <span class=nx>d</span><span class=p>[</span><span class=nx>key</span><span class=p>]</span> <span class=p>=</span> <span class=nf>CQCodeUnescapeValue</span><span class=p>(</span><span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>])</span>
+            <span class=nx>i</span><span class=o>++</span>
+            <span class=nx>j</span> <span class=p>=</span> <span class=nx>i</span>
+            <span class=nf>saveCQCode</span><span class=p>()</span>
+            <span class=k>goto</span> <span class=nx>S1</span>
+        <span class=p>}</span>
+    <span class=p>}</span>
+    <span class=k>goto</span> <span class=nx>End</span>
+<span class=nx>End</span><span class=p>:</span>
+    <span class=k>if</span> <span class=nx>i</span> <span class=p>&gt;</span> <span class=nx>j</span> <span class=p>{</span>
+        <span class=nf>saveText</span><span class=p>(</span><span class=nx>s</span><span class=p>[</span><span class=nx>j</span><span class=p>:</span><span class=nx>i</span><span class=p>])</span>
+    <span class=p>}</span>
+    <span class=k>return</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>同时，我将判断是否是CQ码头 <code>"[CQ:"</code> 改成了用 <code>uint32</code> 进行比较(与大小端有关),进一步优化了性能.
 最终的结果是十分的 Amazing 啊，比重写前的状态机快了几倍。</p>
 <h3 id=减少map的创建>减少map的创建</h3>
 <p>目前的实现已经十分快了，正当我觉得没有任何可以优化的地方时，我突然发现了用于保存CQ码参数的map可以进行内存复用。</p>
 <p>Go 编译器对map的清空进行了优化，下面这样的代码，Go 编译器会将它优化成一个runtime内部函数，对整个map一次清空。</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=ln>1</span><span class=kd>var</span> <span class=nx>a</span> <span class=kd>map</span><span class=p>[</span><span class=nx>type1</span><span class=p>]</span><span class=nx>type2</span>
-<span class=ln>2</span>
-<span class=ln>3</span><span class=k>for</span> <span class=nx>k</span> <span class=o>:=</span> <span class=k>range</span> <span class=nx>a</span> <span class=p>{</span>
-<span class=ln>4</span>    <span class=nb>delete</span><span class=p>(</span><span class=nx>a</span><span class=p>,</span> <span class=nx>k</span><span class=p>)</span>
-<span class=ln>5</span><span class=p>}</span>
-</code></pre></div><p>虽然并不能释放已使用的内存，但是我们可以复用内存，减少map的扩容，减少<code>alloc</code>，大大提高运行速度。</p>
+<div class=highlight><div class=chroma>
+<table class=lntable><tr><td class=lntd>
+<pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span></code></pre></td>
+<td class=lntd>
+<pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=kd>var</span> <span class=nx>a</span> <span class=kd>map</span><span class=p>[</span><span class=nx>type1</span><span class=p>]</span><span class=nx>type2</span>
+
+<span class=k>for</span> <span class=nx>k</span> <span class=o>:=</span> <span class=k>range</span> <span class=nx>a</span> <span class=p>{</span>
+    <span class=nb>delete</span><span class=p>(</span><span class=nx>a</span><span class=p>,</span> <span class=nx>k</span><span class=p>)</span>
+<span class=p>}</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>虽然并不能释放已使用的内存，但是我们可以复用内存，减少map的扩容，减少<code>alloc</code>，大大提高运行速度。</p>
 <div class="details admonition tip open">
 <div class="details-summary admonition-title">
 <i class="icon fas fa-lightbulb fa-fw"></i>内存复用<i class="details-icon fas fa-angle-right fa-fw"></i>
@@ -358,16 +585,31 @@ Go对边界检查消除优化还不够全面，往往需要我们手动提示编
 </div>
 </div>
 <p>于是我做了一个小改动</p>
-<div class=highlight><pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=ln>1</span><span class=nx>S2</span><span class=p>:</span> <span class=c1>// CQCode Type
-</span><span class=ln>2</span><span class=c1></span>    <span class=c1>// d = map[string]string{} // old 
-</span><span class=ln>3</span><span class=c1></span>    <span class=k>for</span> <span class=nx>k</span> <span class=o>:=</span> <span class=k>range</span> <span class=nx>a</span> <span class=p>{</span>
-<span class=ln>4</span>        <span class=nb>delete</span><span class=p>(</span><span class=nx>a</span><span class=p>,</span> <span class=nx>k</span><span class=p>)</span>
-<span class=ln>5</span>    <span class=p>}</span>
-<span class=ln>6</span>    <span class=k>for</span> <span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>l</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
-<span class=ln>7</span>        <span class=c1>// ignore
-</span><span class=ln>8</span><span class=c1></span>    <span class=p>}</span>
-<span class=ln>9</span>    <span class=k>goto</span> <span class=nx>End</span>
-</code></pre></div><p>经过这次改动后，CQ码的解析速度又提高了<code>33%</code>。</p>
+<div class=highlight><div class=chroma>
+<table class=lntable><tr><td class=lntd>
+<pre tabindex=0 class=chroma><code><span class=lnt>1
+</span><span class=lnt>2
+</span><span class=lnt>3
+</span><span class=lnt>4
+</span><span class=lnt>5
+</span><span class=lnt>6
+</span><span class=lnt>7
+</span><span class=lnt>8
+</span><span class=lnt>9
+</span></code></pre></td>
+<td class=lntd>
+<pre tabindex=0 class=chroma><code class=language-go data-lang=go><span class=nx>S2</span><span class=p>:</span> <span class=c1>// CQCode Type
+</span><span class=c1></span>    <span class=c1>// d = map[string]string{} // old 
+</span><span class=c1></span>    <span class=k>for</span> <span class=nx>k</span> <span class=o>:=</span> <span class=k>range</span> <span class=nx>a</span> <span class=p>{</span>
+        <span class=nb>delete</span><span class=p>(</span><span class=nx>a</span><span class=p>,</span> <span class=nx>k</span><span class=p>)</span>
+    <span class=p>}</span>
+    <span class=k>for</span> <span class=p>;</span> <span class=nx>i</span> <span class=p>&lt;</span> <span class=nx>l</span><span class=p>;</span> <span class=nx>i</span><span class=o>++</span> <span class=p>{</span>
+        <span class=c1>// ignore
+</span><span class=c1></span>    <span class=p>}</span>
+    <span class=k>goto</span> <span class=nx>End</span>
+</code></pre></td></tr></table>
+</div>
+</div><p>经过这次改动后，CQ码的解析速度又提高了<code>33%</code>。</p>
 <h2 id=总结>总结</h2>
 <p>最后总结下来，优化Go程序的性能可以从下面几个角度入手</p>
 <ol>
@@ -380,21 +622,21 @@ Go对边界检查消除优化还不够全面，往往需要我们手动提示编
 <div class=post-info>
 <div class=post-info-line>
 <div class=post-info-mod>
-<span>更新于 2021-07-27</span>
+<span>更新于 2021-07-28</span>
 </div>
 <div class=post-info-license></div>
 </div>
 <div class=post-info-line>
 <div class=post-info-md></div>
 <div class=post-info-share>
-<span><a href=javascript:void(0); title="分享到 Twitter" data-sharer=twitter data-url=https://www.wdvxdr.com/posts/cqcode_speedup/ data-title=加速CQ码解析背后原理><i class="fab fa-twitter fa-fw"></i></a><a href=javascript:void(0); title="分享到 Facebook" data-sharer=facebook data-url=https://www.wdvxdr.com/posts/cqcode_speedup/><i class="fab fa-facebook-square fa-fw"></i></a><a href=javascript:void(0); title="分享到 Reddit" data-sharer=reddit data-url=https://www.wdvxdr.com/posts/cqcode_speedup/><i class="fab fa-reddit fa-fw"></i></a><a href=javascript:void(0); title="分享到 微博" data-sharer=weibo data-url=https://www.wdvxdr.com/posts/cqcode_speedup/ data-title=加速CQ码解析背后原理><i class="fab fa-weibo fa-fw"></i></a></span>
+<span><a href=# onclick=return!1 title="分享到 Twitter" data-sharer=twitter data-url=https://www.wdvxdr.com/posts/cqcode_speedup/ data-title=加速CQ码解析背后原理><i class="fab fa-twitter fa-fw"></i></a><a href=# onclick=return!1 title="分享到 Facebook" data-sharer=facebook data-url=https://www.wdvxdr.com/posts/cqcode_speedup/><i class="fab fa-facebook-square fa-fw"></i></a><a href=# onclick=return!1 title="分享到 Reddit" data-sharer=reddit data-url=https://www.wdvxdr.com/posts/cqcode_speedup/><i class="fab fa-reddit fa-fw"></i></a><a href=# onclick=return!1 title="分享到 微博" data-sharer=weibo data-url=https://www.wdvxdr.com/posts/cqcode_speedup/ data-title=加速CQ码解析背后原理><i class="fab fa-weibo fa-fw"></i></a></span>
 </div>
 </div>
 </div>
 <div class=post-info-more>
 <section class=post-tags></section>
 <section>
-<span><a href=javascript:void(0); onclick=window.history.back()>返回</a></span>&nbsp;|&nbsp;<span><a href=/>主页</a></span>
+<span><a href=# onclick=window.history.back()>返回</a></span>&nbsp;|&nbsp;<span><a href=/>主页</a></span>
 </section>
 </div>
 <div class=post-nav><a href=/posts/go_mutex/ class=prev rel=prev title="Golang Mutex源码分析"><i class="fas fa-angle-left fa-fw"></i>Golang Mutex源码分析</a>
@@ -404,14 +646,15 @@ Go对边界检查消除优化还不够全面，往往需要我们手动提示编
 Please enable JavaScript to view the comments powered by <a href=https://valine.js.org/>Valine</a>.
 </noscript></div></article></div>
 </main><footer class=footer>
-<div class=footer-container><div class=footer-line>由 <a href=https://gohugo.io/ target=_blank rel="noopener noreffer" title="Hugo 0.86.0">Hugo</a> 强力驱动 | 主题 - <a href=https://github.com/dillonzq/LoveIt target=_blank rel="noopener noreffer" title="LoveIt 0.2.10"><i class="far fa-kiss-wink-heart fa-fw"></i> LoveIt</a>
-</div><div class=footer-line><i class="far fa-copyright fa-fw"></i><span itemprop=copyrightYear>2020 - 2021</span><span class=author itemprop=copyrightHolder>&nbsp;<a href=/ target=_blank>wdvxdr</a></span>&nbsp;|&nbsp;<span class=license><a rel="license external nofollow noopener noreffer" href=https://creativecommons.org/licenses/by-nc/4.0/ target=_blank>CC BY-NC 4.0</a></span></div>
-</div>
-</footer></div>
-<div id=fixed-buttons><a href=# id=back-to-top class=fixed-button title=回到顶部>
+<div class=footer-container><div class=footer-line>由 <a href=https://gohugo.io/ target=_blank rel="noopener noreffer" title="Hugo 0.86.0">Hugo</a> 强力驱动 | 主题 - <a href=https://github.com/HEIGE-PCloud/DoIt target=_blank rel="noopener noreffer" title="DoIt 0.2.10"><i class="far fa-edit fa-fw"></i> DoIt</a>
+</div><div class=footer-line><i class="far fa-copyright fa-fw"></i><span itemprop=copyrightYear>2020 - 2021</span><span class=author itemprop=copyrightHolder>&nbsp;<a href=/ target=_blank rel="noopener noreferrer">wdvxdr</a></span>&nbsp;|&nbsp;<span class=license><a rel="license external nofollow noopener noreffer" href=https://creativecommons.org/licenses/by-nc/4.0/ target=_blank>CC BY-NC 4.0</a></span></div>
+</div></footer></div>
+<div id=fixed-buttons><a href=#back-to-top id=back-to-top class=fixed-button title=回到顶部>
 <i class="fas fa-arrow-up fa-fw"></i>
 </a><a href=# id=view-comments class=fixed-button title=查看评论>
 <i class="fas fa-comment fa-fw"></i>
 </a>
-</div><link rel=stylesheet href=/lib/valine/valine.min.css><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.css><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/contrib/copy-tex.min.css><link rel=stylesheet href=/lib/mermaid/mermaid.min.css><script type=text/javascript src=https://cdn.jsdelivr.net/npm/valine@1.4.14/dist/Valine.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/smooth-scroll@16.1.3/dist/smooth-scroll.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/autocomplete.js@0.37.1/dist/autocomplete.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/lunr@2.3.8/lunr.min.js></script><script type=text/javascript src=/lib/lunr/lunr.stemmer.support.min.js></script><script type=text/javascript src=/lib/lunr/lunr.zh.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/lazysizes@5.2.2/lazysizes.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/clipboard@2.0.6/dist/clipboard.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/sharer.js@0.4.0/sharer.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/katex.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/contrib/auto-render.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/contrib/copy-tex.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/katex@0.11.1/dist/contrib/mhchem.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/mermaid@8.5.1/dist/mermaid.min.js></script><script type=text/javascript>window.config={code:{copyTitle:"复制到剪贴板",maxShownLines:20},comment:{valine:{appId:"YNwTWaP37mrOqpmagflrB4Hh-gzGzoHsz",appKey:"Gzgv3AonIQExGzo3lYrEyJ2S",avatar:"mp",el:"#valine",emojiCDN:"https://cdn.jsdelivr.net/npm/emoji-datasource-google@5.0.1/img/google/64/",emojiMaps:{100:"1f4af.png",alien:"1f47d.png",anger:"1f4a2.png",angry:"1f620.png",anguished:"1f627.png",astonished:"1f632.png",black_heart:"1f5a4.png",blue_heart:"1f499.png",blush:"1f60a.png",bomb:"1f4a3.png",boom:"1f4a5.png",broken_heart:"1f494.png",brown_heart:"1f90e.png",clown_face:"1f921.png",cold_face:"1f976.png",cold_sweat:"1f630.png",confounded:"1f616.png",confused:"1f615.png",cry:"1f622.png",crying_cat_face:"1f63f.png",cupid:"1f498.png",dash:"1f4a8.png",disappointed:"1f61e.png",disappointed_relieved:"1f625.png",dizzy:"1f4ab.png",dizzy_face:"1f635.png",drooling_face:"1f924.png",exploding_head:"1f92f.png",expressionless:"1f611.png",face_vomiting:"1f92e.png",face_with_cowboy_hat:"1f920.png",face_with_hand_over_mouth:"1f92d.png",face_with_head_bandage:"1f915.png",face_with_monocle:"1f9d0.png",face_with_raised_eyebrow:"1f928.png",face_with_rolling_eyes:"1f644.png",face_with_symbols_on_mouth:"1f92c.png",face_with_thermometer:"1f912.png",fearful:"1f628.png",flushed:"1f633.png",frowning:"1f626.png",ghost:"1f47b.png",gift_heart:"1f49d.png",green_heart:"1f49a.png",grimacing:"1f62c.png",grin:"1f601.png",grinning:"1f600.png",hankey:"1f4a9.png",hear_no_evil:"1f649.png",heart:"2764-fe0f.png",heart_decoration:"1f49f.png",heart_eyes:"1f60d.png",heart_eyes_cat:"1f63b.png",heartbeat:"1f493.png",heartpulse:"1f497.png",heavy_heart_exclamation_mark_ornament:"2763-fe0f.png",hole:"1f573-fe0f.png",hot_face:"1f975.png",hugging_face:"1f917.png",hushed:"1f62f.png",imp:"1f47f.png",innocent:"1f607.png",japanese_goblin:"1f47a.png",japanese_ogre:"1f479.png",joy:"1f602.png",joy_cat:"1f639.png",kiss:"1f48b.png",kissing:"1f617.png",kissing_cat:"1f63d.png",kissing_closed_eyes:"1f61a.png",kissing_heart:"1f618.png",kissing_smiling_eyes:"1f619.png",laughing:"1f606.png",left_speech_bubble:"1f5e8-fe0f.png",love_letter:"1f48c.png",lying_face:"1f925.png",mask:"1f637.png",money_mouth_face:"1f911.png",nauseated_face:"1f922.png",nerd_face:"1f913.png",neutral_face:"1f610.png",no_mouth:"1f636.png",open_mouth:"1f62e.png",orange_heart:"1f9e1.png",partying_face:"1f973.png",pensive:"1f614.png",persevere:"1f623.png",pleading_face:"1f97a.png",pouting_cat:"1f63e.png",purple_heart:"1f49c.png",rage:"1f621.png",relaxed:"263a-fe0f.png",relieved:"1f60c.png",revolving_hearts:"1f49e.png",right_anger_bubble:"1f5ef-fe0f.png",robot_face:"1f916.png",rolling_on_the_floor_laughing:"1f923.png",scream:"1f631.png",scream_cat:"1f640.png",see_no_evil:"1f648.png",shushing_face:"1f92b.png",skull:"1f480.png",skull_and_crossbones:"2620-fe0f.png",sleeping:"1f634.png",sleepy:"1f62a.png",slightly_frowning_face:"1f641.png",slightly_smiling_face:"1f642.png",smile:"1f604.png",smile_cat:"1f638.png",smiley:"1f603.png",smiley_cat:"1f63a.png",smiling_face_with_3_hearts:"1f970.png",smiling_imp:"1f608.png",smirk:"1f60f.png",smirk_cat:"1f63c.png",sneezing_face:"1f927.png",sob:"1f62d.png",space_invader:"1f47e.png",sparkling_heart:"1f496.png",speak_no_evil:"1f64a.png",speech_balloon:"1f4ac.png","star-struck":"1f929.png",stuck_out_tongue:"1f61b.png",stuck_out_tongue_closed_eyes:"1f61d.png",stuck_out_tongue_winking_eye:"1f61c.png",sunglasses:"1f60e.png",sweat:"1f613.png",sweat_drops:"1f4a6.png",sweat_smile:"1f605.png",thinking_face:"1f914.png",thought_balloon:"1f4ad.png",tired_face:"1f62b.png",triumph:"1f624.png",two_hearts:"1f495.png",unamused:"1f612.png",upside_down_face:"1f643.png",weary:"1f629.png",white_frowning_face:"2639-fe0f.png",white_heart:"1f90d.png",wink:"1f609.png",woozy_face:"1f974.png",worried:"1f61f.png",yawning_face:"1f971.png",yellow_heart:"1f49b.png",yum:"1f60b.png",zany_face:"1f92a.png",zipper_mouth_face:"1f910.png",zzz:"1f4a4.png"},enableQQ:!1,highlight:!0,lang:"zh-cn",pageSize:10,placeholder:"你的评论 ...",recordIP:!0,visitor:!0}},data:{"id-1":"stateDiagram-v2\n    [*] --\u003e PlainText\n    note left of PlainText: 纯文本\n    PlainText --\u003e CQCode: 遇到 [CQ：\n    state CQCode {\n        [*] --\u003e Type\n        Type  --\u003e ParameterList : 遇到 ,\n        ParameterList --\u003e[*]\n        Type  --\u003e [*] : ] (无参数)\n        state ParameterList {\n            [*] --\u003e key\n            key --\u003e value : 遇到 =\n            value --\u003e key : 遇到 ,\n            value --\u003e [*] : 遇到 ]\n        }\n    }\n    CQCode --\u003e PlainText"},math:{delimiters:[{display:!0,left:"$$",right:"$$"},{display:!0,left:"\\[",right:"\\]"},{display:!1,left:"$",right:"$"},{display:!1,left:"\\(",right:"\\)"}],strict:!1},search:{highlightTag:"em",lunrIndexURL:"/index.json",lunrLanguageCode:"zh",lunrSegmentitURL:"/lib/lunr/lunr.segmentit.js",maxResultLength:10,noResultsFound:"没有找到结果",snippetLength:50,type:"lunr"}}</script><script type=text/javascript src=/js/theme.min.js></script></body>
+</div><div class=assets><script type=text/javascript src=https://cdn.jsdelivr.net/npm/autocomplete.js@0.38.0/dist/autocomplete.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/lunr@2.3.9/lunr.min.js></script><script type=text/javascript src=/lib/lunr/lunr.stemmer.support.min.js></script><script type=text/javascript src=/lib/lunr/lunr.zh.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/lazysizes@5.3.2/lazysizes.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/topbar@1.0.1/topbar.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/@sliphua/pjax@0.13.0/dist/pjax.min.js></script><script type=text/javascript src=/js/theme.min.js></script></div>
+<div class=pjax-assets><script type=text/javascript src=https://cdn.jsdelivr.net/npm/valine@1.4.14/dist/Valine.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/clipboard@2.0.8/dist/clipboard.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/sharer.js@0.4.1/sharer.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/katex.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/contrib/auto-render.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/contrib/copy-tex.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/contrib/mhchem.min.js></script><script type=text/javascript src=https://cdn.jsdelivr.net/npm/mermaid@8.11.0/dist/mermaid.min.js></script><script type=text/javascript>window.config={code:{copyTitle:"复制到剪贴板",maxShownLines:20},comment:{valine:{appId:"YNwTWaP37mrOqpmagflrB4Hh-gzGzoHsz",appKey:"Gzgv3AonIQExGzo3lYrEyJ2S",avatar:"mp",el:"#valine",emojiCDN:"https://cdn.jsdelivr.net/npm/emoji-datasource-google@5.0.1/img/google/64/",emojiMaps:{100:"1f4af.png",alien:"1f47d.png",anger:"1f4a2.png",angry:"1f620.png",anguished:"1f627.png",astonished:"1f632.png",black_heart:"1f5a4.png",blue_heart:"1f499.png",blush:"1f60a.png",bomb:"1f4a3.png",boom:"1f4a5.png",broken_heart:"1f494.png",brown_heart:"1f90e.png",clown_face:"1f921.png",cold_face:"1f976.png",cold_sweat:"1f630.png",confounded:"1f616.png",confused:"1f615.png",cry:"1f622.png",crying_cat_face:"1f63f.png",cupid:"1f498.png",dash:"1f4a8.png",disappointed:"1f61e.png",disappointed_relieved:"1f625.png",dizzy:"1f4ab.png",dizzy_face:"1f635.png",drooling_face:"1f924.png",exploding_head:"1f92f.png",expressionless:"1f611.png",face_vomiting:"1f92e.png",face_with_cowboy_hat:"1f920.png",face_with_hand_over_mouth:"1f92d.png",face_with_head_bandage:"1f915.png",face_with_monocle:"1f9d0.png",face_with_raised_eyebrow:"1f928.png",face_with_rolling_eyes:"1f644.png",face_with_symbols_on_mouth:"1f92c.png",face_with_thermometer:"1f912.png",fearful:"1f628.png",flushed:"1f633.png",frowning:"1f626.png",ghost:"1f47b.png",gift_heart:"1f49d.png",green_heart:"1f49a.png",grimacing:"1f62c.png",grin:"1f601.png",grinning:"1f600.png",hankey:"1f4a9.png",hear_no_evil:"1f649.png",heart:"2764-fe0f.png",heart_decoration:"1f49f.png",heart_eyes:"1f60d.png",heart_eyes_cat:"1f63b.png",heartbeat:"1f493.png",heartpulse:"1f497.png",heavy_heart_exclamation_mark_ornament:"2763-fe0f.png",hole:"1f573-fe0f.png",hot_face:"1f975.png",hugging_face:"1f917.png",hushed:"1f62f.png",imp:"1f47f.png",innocent:"1f607.png",japanese_goblin:"1f47a.png",japanese_ogre:"1f479.png",joy:"1f602.png",joy_cat:"1f639.png",kiss:"1f48b.png",kissing:"1f617.png",kissing_cat:"1f63d.png",kissing_closed_eyes:"1f61a.png",kissing_heart:"1f618.png",kissing_smiling_eyes:"1f619.png",laughing:"1f606.png",left_speech_bubble:"1f5e8-fe0f.png",love_letter:"1f48c.png",lying_face:"1f925.png",mask:"1f637.png",money_mouth_face:"1f911.png",nauseated_face:"1f922.png",nerd_face:"1f913.png",neutral_face:"1f610.png",no_mouth:"1f636.png",open_mouth:"1f62e.png",orange_heart:"1f9e1.png",partying_face:"1f973.png",pensive:"1f614.png",persevere:"1f623.png",pleading_face:"1f97a.png",pouting_cat:"1f63e.png",purple_heart:"1f49c.png",rage:"1f621.png",relaxed:"263a-fe0f.png",relieved:"1f60c.png",revolving_hearts:"1f49e.png",right_anger_bubble:"1f5ef-fe0f.png",robot_face:"1f916.png",rolling_on_the_floor_laughing:"1f923.png",scream:"1f631.png",scream_cat:"1f640.png",see_no_evil:"1f648.png",shushing_face:"1f92b.png",skull:"1f480.png",skull_and_crossbones:"2620-fe0f.png",sleeping:"1f634.png",sleepy:"1f62a.png",slightly_frowning_face:"1f641.png",slightly_smiling_face:"1f642.png",smile:"1f604.png",smile_cat:"1f638.png",smiley:"1f603.png",smiley_cat:"1f63a.png",smiling_face_with_3_hearts:"1f970.png",smiling_imp:"1f608.png",smirk:"1f60f.png",smirk_cat:"1f63c.png",sneezing_face:"1f927.png",sob:"1f62d.png",space_invader:"1f47e.png",sparkling_heart:"1f496.png",speak_no_evil:"1f64a.png",speech_balloon:"1f4ac.png","star-struck":"1f929.png",stuck_out_tongue:"1f61b.png",stuck_out_tongue_closed_eyes:"1f61d.png",stuck_out_tongue_winking_eye:"1f61c.png",sunglasses:"1f60e.png",sweat:"1f613.png",sweat_drops:"1f4a6.png",sweat_smile:"1f605.png",thinking_face:"1f914.png",thought_balloon:"1f4ad.png",tired_face:"1f62b.png",triumph:"1f624.png",two_hearts:"1f495.png",unamused:"1f612.png",upside_down_face:"1f643.png",weary:"1f629.png",white_frowning_face:"2639-fe0f.png",white_heart:"1f90d.png",wink:"1f609.png",woozy_face:"1f974.png",worried:"1f61f.png",yawning_face:"1f971.png",yellow_heart:"1f49b.png",yum:"1f60b.png",zany_face:"1f92a.png",zipper_mouth_face:"1f910.png",zzz:"1f4a4.png"},enableQQ:!1,highlight:!0,lang:"zh-cn",pageSize:10,placeholder:"你的评论 ...",recordIP:!0,visitor:!0}},data:{"id-1":" \nstateDiagram-v2\n    [*] --\u003e PlainText\n    note left of PlainText: 纯文本\n    PlainText --\u003e CQCode: 遇到 [CQ：\n    state CQCode {\n        [*] --\u003e Type\n        Type  --\u003e ParameterList : 遇到 ,\n        ParameterList --\u003e[*]\n        Type  --\u003e [*] : ] (无参数)\n        state ParameterList {\n            [*] --\u003e key\n            key --\u003e value : 遇到 =\n            value --\u003e key : 遇到 ,\n            value --\u003e [*] : 遇到 ]\n        }\n    }\n    CQCode --\u003e PlainText"},math:{delimiters:[{display:!0,left:"$$",right:"$$"},{display:!0,left:"\\[",right:"\\]"},{display:!1,left:"$",right:"$"},{display:!1,left:"\\(",right:"\\)"}],strict:!1},mermaid:!0,search:{highlightTag:"em",lunrIndexURL:"/index.json",lunrLanguageCode:"zh",lunrSegmentitURL:"/lib/lunr/lunr.segmentit.js",maxResultLength:10,noResultsFound:"没有找到结果",snippetLength:50,type:"lunr"},sharerjs:!0}</script><link rel=stylesheet href=/lib/valine/valine.min.css><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/katex.min.css><link rel=stylesheet href=https://cdn.jsdelivr.net/npm/katex@0.13.11/dist/contrib/copy-tex.min.css><link rel=stylesheet href=/lib/mermaid/mermaid.min.css></div>
+</body>
 </html>
