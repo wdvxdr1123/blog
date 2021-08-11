@@ -45,7 +45,7 @@ enableEmoji = true
   [params.search]
     enable = true
     # 搜索引擎的类型 ("lunr", "algolia")
-    type = "lunr"
+    type = "fuse"
     # 文章内容最长索引长度
     contentLength = 4000
     # 搜索框的占位提示语
@@ -57,6 +57,17 @@ enableEmoji = true
     # 搜索结果中高亮部分的 HTML 标签
     highlightTag = "em"
     # 是否在搜索索引中使用基于 baseURL 的绝对路径
+    [params.search.fuse]
+      # DoIt 新增 | 0.2.12 https://fusejs.io/api/options.html
+      isCaseSensitive = false
+      minMatchCharLength = 2
+      findAllMatches = false
+      location = 0
+      threshold = 0.3
+      distance = 100
+      ignoreLocation = false
+      useExtendedSearch = false
+      ignoreFieldNorm = false
 
   # 页面底部信息配置
   [params.footer]
@@ -108,7 +119,7 @@ enableEmoji = true
       # LoveIt 更改 | 0.2.7 主页显示的网站标题 (支持 HTML 格式)
       title = "wdvxdr's blog"
       # 主页显示的网站副标题
-      subtitle = "我的全新 Hugo Blog !"
+      subtitle = "如果你认识从前的我，也许会原谅现在的我。"
       # 是否为副标题显示打字机动画
       typeit = true
       # 是否显示社交账号
@@ -294,9 +305,9 @@ enableEmoji = true
         pageSize = 10
         lang = ""
         visitor = true
-        recordIP = true
+        recordIP = false
         highlight = true
-        enableQQ = false
+        enableQQ = true
         serverURLs = ""
         # LoveIt 新增 | 0.2.6 emoji 数据文件名称, 默认是 "google.yml"
         # ("apple.yml", "google.yml", "facebook.yml", "twitter.yml")
