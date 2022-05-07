@@ -17,3 +17,4 @@ layout: "links"
 {{< friend name="Gaein nidb" url="https://blog.gaein.cn/" avatar="https://avatars.githubusercontent.com/u/36162655?v=4" bio="一个神秘的人" >}}
 {{< friend name="synodriver" url="https://synodriver.github.io/" avatar="https://avatars.githubusercontent.com/u/50922489?v=4" bio="一个神秘的人" >}}
 {{< friend name="地河" url="https://blog.di.he.cn/" avatar="https://avatars.githubusercontent.com/Chendihe4975" bio="是魔法地河!" >}}
+{{< friend name="地河" url="https://blog.di.he.cn/" avatar="https://avatars.githubusercontent.com/Chendihe4975" bio="是魔法地河!" >}}
